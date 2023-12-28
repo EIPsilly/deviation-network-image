@@ -12,6 +12,12 @@ def build_dataloader(args, **kwargs):
                                 worker_init_fn=worker_init_fn_seed,
                                 batch_sampler=BalancedBatchSampler(args, train_set),
                                 **kwargs)
+        val_data = data.val_data
+        val_loader = DataLoader(val_data,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                worker_init_fn=worker_init_fn_seed,
+                                **kwargs)
         test_loader = {}
         for key in data.test_dict:
             test_loader[key] = DataLoader(data.test_dict[key],
@@ -32,4 +38,4 @@ def build_dataloader(args, **kwargs):
                                     shuffle=False,
                                     worker_init_fn=worker_init_fn_seed,
                                     **kwargs)
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader

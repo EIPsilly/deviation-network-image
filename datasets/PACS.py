@@ -161,7 +161,7 @@ class PACS_Data():
             
         normal_class = "".join(list(map(str,args.normal_class)))
         anomaly_class = "".join(list(map(str,args.anomaly_class)))
-        train_path = f'../domain-generalization-for-anomaly-detection/data/semi-supervised/20231221-PACS-{normal_class}-{anomaly_class}.npz'
+        train_path = f'../domain-generalization-for-anomaly-detection/data/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
         data = np.load(train_path, allow_pickle=True)
 
         mean = (0.485, 0.456, 0.406)
@@ -184,19 +184,27 @@ class PACS_Data():
         ])
         
         self.train_data = PACS_Dataset(data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.val_data = PACS_Dataset(data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+
+        logging.info("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))
+        logging.info("y_val\t" + str(dict(sorted(Counter(data["val_labels"]).items()))))
         self.test_dict = {}
-        for domain in os.listdir(f'{config["PACS_root"]}/test'):
-            # if domain in self.in_domain_type:
-            #     continue
-            test_img_path_list = []
-            test_label = []
-            for _class_ in os.listdir(f'{config["PACS_root"]}/test/{domain}'):
-                img_paths = glob.glob(f'{config["PACS_root"]}/test/{domain}/{_class_}/*.[jp][pn]g')
-                img_paths = [path.split("PACS")[1] for path in img_paths]
-                test_img_path_list += img_paths
-                test_label += [int(class_to_idx[_class_] in args.anomaly_class)] * len(img_paths)
-            logging.info(domain + "\ty_test\t" + str(dict(sorted(Counter(test_label).items()))))
-            self.test_dict[domain] = PACS_Dataset(test_img_path_list, test_label, transform=test_transform, target_transform=None, augment_transform = augment_transform)
+        for domain in ["photo", "art_painting", "cartoon", "sketch"]:
+            self.test_dict[domain] = PACS_Dataset(data[f"test_{domain}"], data[f"test_{domain}_labels"], transform=test_transform, target_transform=None, augment_transform = augment_transform)
+            logging.info(domain + "\ty_test\t" + str(dict(sorted(Counter(data[f"test_{domain}_labels"]).items()))))
+            
+        # for domain in os.listdir(f'{config["PACS_root"]}/test'):
+        #     # if domain in self.in_domain_type:
+        #     #     continue
+        #     test_img_path_list = []
+        #     test_label = []
+        #     for _class_ in os.listdir(f'{config["PACS_root"]}/test/{domain}'):
+        #         img_paths = glob.glob(f'{config["PACS_root"]}/test/{domain}/{_class_}/*.[jp][pn]g')
+        #         img_paths = [path.split("PACS")[1] for path in img_paths]
+        #         test_img_path_list += img_paths
+        #         test_label += [int(class_to_idx[_class_] in args.anomaly_class)] * len(img_paths)
+        #     logging.info(domain + "\ty_test\t" + str(dict(sorted(Counter(test_label).items()))))
+        #     self.test_dict[domain] = PACS_Dataset(test_img_path_list, test_label, transform=test_transform, target_transform=None, augment_transform = augment_transform)
 
 
     def loaders(self, batch_size: int, shuffle_train=True, shuffle_test=False, num_workers: int = 8, drop_last_train = True):

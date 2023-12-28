@@ -9,6 +9,9 @@ class SemiADNet(nn.Module):
         super(SemiADNet, self).__init__()
         self.args = args
         self.feature_extractor = build_feature_extractor(self.args.backbone)
+        if isinstance(self.feature_extractor, tuple):
+            self.encoder = self.feature_extractor[0]
+            self.bn = self.feature_extractor[1]
         self.conv = nn.Conv2d(in_channels=NET_OUT_DIM[self.args.backbone], out_channels=1, kernel_size=1, padding=0)
 
 
@@ -20,7 +23,11 @@ class SemiADNet(nn.Module):
         image_pyramid = list()
         for s in range(self.args.n_scales):
             image_scaled = F.interpolate(image, size=self.args.img_size // (2 ** s)) if s > 0 else image
-            feature = self.feature_extractor(image_scaled)
+            if self.args.backbone == "DGAD":
+                features_intermediate = self.encoder(image_scaled)
+                texture_feature, feature = self.bn(features_intermediate)
+            else:
+                feature = self.feature_extractor(image_scaled)
 
             scores = self.conv(feature)
             if self.args.topk > 0:
