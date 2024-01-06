@@ -161,7 +161,11 @@ class PACS_Data():
             
         normal_class = "".join(list(map(str,args.normal_class)))
         anomaly_class = "".join(list(map(str,args.anomaly_class)))
-        train_path = f'../domain-generalization-for-anomaly-detection/data/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
+        if args.domain_cnt == 1:
+            train_path = f'../domain-generalization-for-anomaly-detection/data/one_source_domain/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
+        elif args.domain_cnt == 3:
+            train_path = f'../domain-generalization-for-anomaly-detection/data/three_source_domain/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
+        
         data = np.load(train_path, allow_pickle=True)
 
         mean = (0.485, 0.456, 0.406)
@@ -184,6 +188,8 @@ class PACS_Data():
         ])
         
         self.train_data = PACS_Dataset(data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        unlabeled_idx = np.where(data["train_labels"] == 0)[0]
+        self.unlabeled_data = PACS_Dataset(data["train_set_path"][unlabeled_idx], data["train_labels"][unlabeled_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
         self.val_data = PACS_Dataset(data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
 
         logging.info("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))

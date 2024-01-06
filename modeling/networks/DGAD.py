@@ -452,12 +452,13 @@ class BN_layer(nn.Module):
         texture_feature = self.relu(self.bn2(self.conv2(self.relu(self.bn1(self.conv1(x[0]))))))
         # l2 = self.relu(self.bn3(self.conv3(x[1])))
         # feature = torch.cat([x[1] - 0.5 * texture_feature, x[1]], 1)
-        output = self.layer4(x[1] - 0.5 * texture_feature)
-        # x = self.avgpool(output)
+        invariant_feature = self.layer4(x[1] - 0.25 * texture_feature)
+        origin_feature = self.layer4(x[1])
+        # x = self.avgpool(feature)
         # x = torch.flatten(x, 1)
         # x = self.fc(x)
 
-        return texture_feature, output.contiguous()
+        return texture_feature, invariant_feature, origin_feature
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)

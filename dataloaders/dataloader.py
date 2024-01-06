@@ -26,6 +26,12 @@ def build_dataloader(args, **kwargs):
                                           worker_init_fn=worker_init_fn_seed,
                                           **kwargs)
         
+        unlabeled_data = data.unlabeled_data
+        unlabeled_loader = DataLoader(unlabeled_data,
+                                      worker_init_fn=worker_init_fn_seed,
+                                      batch_size=args.batch_size,
+                                      **kwargs)
+        
     elif args.data_name == "MVTec":
         train_set = mvtecad.MVTecAD(args, train=True)
         test_set = mvtecad.MVTecAD(args, train=False)
@@ -38,4 +44,4 @@ def build_dataloader(args, **kwargs):
                                     shuffle=False,
                                     worker_init_fn=worker_init_fn_seed,
                                     **kwargs)
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader, test_loader, unlabeled_loader
