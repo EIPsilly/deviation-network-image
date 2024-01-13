@@ -22,5 +22,10 @@ def build_feature_extractor(backbone):
         from .DGAD import wide_resnet50_2
         net = wide_resnet50_2(pretrained=True)
         return net[0].to("cuda"), net[1].to("cuda")
+    elif backbone == "EFDM_DGAD":
+        print("Feature extractor: EFDM_DGAD")
+        from .resnet_TTA import wide_resnet50_2
+        net = wide_resnet50_2(pretrained=True)
+        return net[0].to("cuda"), net[1].to("cuda")
     else:
         raise NotImplementedError

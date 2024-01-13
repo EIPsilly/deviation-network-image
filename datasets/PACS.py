@@ -215,10 +215,10 @@ class PACS_Data():
 
     def loaders(self, batch_size: int, shuffle_train=True, shuffle_test=False, num_workers: int = 8, drop_last_train = True):
 
-        self.train_loader = DataLoader(dataset=self.train_set, batch_size=batch_size, shuffle=shuffle_train,
+        self.train_loader = DataLoader(dataset=self.train_data, batch_size=batch_size, shuffle=shuffle_train,
                                                             num_workers=num_workers, drop_last=drop_last_train)
 
-        self.val_loader = DataLoader(dataset=self.val_set, batch_size=batch_size, shuffle=shuffle_train,
+        self.val_loader = DataLoader(dataset=self.val_data, batch_size=batch_size, shuffle=shuffle_train,
                                                             num_workers=num_workers, drop_last=drop_last_train)
 
         self.test_loader_dict = {}
