@@ -182,8 +182,8 @@ class ResNet(nn.Module):
                                        dilate=replace_stride_with_dilation[0])
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2,
                                        dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
-                                       dilate=replace_stride_with_dilation[2])
+        # self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
+        #                                dilate=replace_stride_with_dilation[2])
         # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -239,10 +239,10 @@ class ResNet(nn.Module):
         feature_a = self.layer1(x)
         feature_b = self.layer2(feature_a)
         feature_c = self.layer3(feature_b)
-        feature_d = self.layer4(feature_c)
+        # feature_d = self.layer4(feature_c)
 
         # return [feature_a, feature_b, feature_c]
-        return [feature_a, feature_d]
+        return [feature_a, feature_c]
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
@@ -261,7 +261,7 @@ def _resnet(
         state_dict = load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
         for k,v in list(state_dict.items()):
-           if 'fc' in k:
+           if 'layer4' in k or 'fc' in k:
                state_dict.pop(k)
         model.load_state_dict(state_dict)
     return model
@@ -385,7 +385,7 @@ class AttnBottleneck(nn.Module):
 class BN_layer(nn.Module):
     def __init__(self,
                  block: Type[Union[BasicBlock, Bottleneck]],
-                 layers: List[int],
+                 layers: int,
                  groups: int = 1,
                  width_per_group: int = 64,
                  norm_layer: Optional[Callable[..., nn.Module]] = None,
@@ -396,25 +396,23 @@ class BN_layer(nn.Module):
         self._norm_layer = norm_layer
         self.groups = groups
         self.base_width = width_per_group
-        self.inplanes = 64 * block.expansion
+        self.inplanes = 256 * block.expansion
         self.dilation = 1
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers, stride=2)
 
-        # self.conv1 = conv3x3(64 * block.expansion, 128 * block.expansion, 2)
-        # self.bn1 = norm_layer(128 * block.expansion)
-        # self.relu = nn.ReLU(inplace=True)
-        # self.conv2 = conv3x3(128 * block.expansion, 256 * block.expansion, 2)
-        # self.bn2 = norm_layer(256 * block.expansion)
-        # self.conv3 = conv3x3(128 * block.expansion, 256 * block.expansion, 2)
-        # self.bn3 = norm_layer(256 * block.expansion)
+        self.conv1 = conv3x3(64 * block.expansion, 128 * block.expansion, 2)
+        self.bn1 = norm_layer(128 * block.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3(128 * block.expansion, 256 * block.expansion, 2)
+        self.bn2 = norm_layer(256 * block.expansion)
+        self.conv3 = conv3x3(128 * block.expansion, 256 * block.expansion, 2)
+        self.bn3 = norm_layer(256 * block.expansion)
 
-        # self.conv4 = conv1x1(1024 * block.expansion, 512 * block.expansion, 1)
-        # self.bn4 = norm_layer(512 * block.expansion)
+        self.conv4 = conv1x1(1024 * block.expansion, 512 * block.expansion, 1)
+        self.bn4 = norm_layer(512 * block.expansion)
 
-        # self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        # self.fc = nn.Linear(512 * block.expansion, 1000)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512 * block.expansion, 1000)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -441,28 +439,26 @@ class BN_layer(nn.Module):
         layers.append(block(self.inplanes * 1, planes, stride, downsample, self.groups,
                             self.base_width, previous_dilation, norm_layer))
         self.inplanes = planes * block.expansion
-        # for _ in range(1, blocks):
-        #     layers.append(block(self.inplanes, planes, groups=self.groups,
-        #                         base_width=self.base_width, dilation=self.dilation,
-        #                         norm_layer=norm_layer))
+        for _ in range(1, blocks):
+            layers.append(block(self.inplanes, planes, groups=self.groups,
+                                base_width=self.base_width, dilation=self.dilation,
+                                norm_layer=norm_layer))
 
         return nn.Sequential(*layers)
 
     def _forward_impl(self, x: Tensor) -> Tensor:
         # See note [TorchScript super()]
         # x = self.cbam(x)
-        # texture_feature = self.relu(self.bn2(self.conv2(self.relu(self.bn1(self.conv1(x[0]))))))
+        texture_feature = self.relu(self.bn2(self.conv2(self.relu(self.bn1(self.conv1(x[0]))))))
         # l2 = self.relu(self.bn3(self.conv3(x[1])))
         # feature = torch.cat([x[1] - 0.5 * texture_feature, x[1]], 1)
-        # invariant_feature = self.layer4(x[1] - 0.25 * texture_feature)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        origin_feature = self.layer4(x)
+        invariant_feature = self.layer4(x[1] - 0.25 * texture_feature)
+        origin_feature = self.layer4(x[1])
         # x = self.avgpool(feature)
         # x = torch.flatten(x, 1)
         # x = self.fc(x)
 
-        return origin_feature
+        return texture_feature, invariant_feature, origin_feature
 
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
@@ -470,7 +466,7 @@ class BN_layer(nn.Module):
 def _BN_layer(
         arch: str,
         block: Type[Union[BasicBlock, Bottleneck]],
-        layers: List[int],
+        layers: int,
         pretrained:bool,
         progress: bool,
         **kwargs: Any
@@ -536,7 +532,7 @@ def wide_resnet50_2(pretrained: bool = False, progress: bool = True, **kwargs: A
     """
     kwargs['width_per_group'] = 64 * 2
     return _resnet('wide_resnet50_2', Bottleneck, [3, 4, 6, 3],
-                   pretrained, progress, **kwargs), _BN_layer("wide_resnet50_2", AttnBottleneck, [3, 4, 6, 3],
+                   pretrained, progress, **kwargs), _BN_layer("wide_resnet50_2", AttnBottleneck, 3, 
                                                              pretrained, progress, **kwargs)
 
 

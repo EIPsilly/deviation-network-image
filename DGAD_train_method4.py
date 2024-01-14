@@ -7,7 +7,7 @@ import argparse
 import os
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net import DGAD_net
+from modeling.DGAD_net_method4 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -27,16 +27,80 @@ class Trainer(object):
         kwargs = {'num_workers': args.workers}
         self.train_loader, self.val_loader, self.test_loader, self.unlabeled_loader = build_dataloader(args, **kwargs)
         
-        self.model = DGAD_net(args)
+        model = DGAD_net(args)
+        self.encoder = model.encoder
+        self.bn = model.bn
         
+        # self.criterion = build_criterion(args.criterion)
+
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
+        # self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
+        
+        self.optimizer = torch.optim.Adam([{"params": self.encoder.parameters()},
+                                           {"params": self.bn.parameters()}], lr = args.pre_lr, weight_decay=1e-5)
+        
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.pre_epochs, eta_min = args.pre_lr * 1e-6)
+
+        if args.cuda:
+            self.encoder = self.encoder.cuda()
+            self.bn = self.bn.cuda()
+            # self.criterion = self.criterion.cuda()
+    
+    def load_model(self, file_name):
+
+        checkpoint = torch.load(file_name)
+        self.model = DGAD_net(args)
+        self.model.load_state_dict(checkpoint)
+
         self.criterion = build_criterion(args.criterion)
+
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
         if args.cuda:
             self.model = self.model.cuda()
             self.criterion = self.criterion.cuda()
-    
+
+
+    def pre_train(self, epoch):
+        train_loss = 0.0
+        self.encoder.train()
+        self.bn.train()
+        tbar = tqdm(self.unlabeled_loader)
+        pre_train_loss_list = []
+        for i, sample in enumerate(tbar):
+            idx, image, augimg, target = sample
+            if self.args.cuda:
+                image, augimg, target = image.cuda(), augimg.cuda(), target.cuda()
+            
+            features_intermediate = self.encoder(image)
+            texture_feature, invariant_feature, origin_feature = self.bn(features_intermediate)
+
+            aug_features_intermediate = self.encoder(augimg)
+            aug_texture_feature, aug_invariant_feature, aug_origin_feature = self.bn(aug_features_intermediate)
+            
+            L_texture = 0.5 * loss_fucntion(texture_feature, aug_texture_feature) # 纹理对比损失
+
+            L_semantic = (loss_fucntion(invariant_feature, origin_feature) +\
+                           loss_fucntion(aug_invariant_feature, aug_origin_feature)+\
+                              loss_fucntion(origin_feature, aug_origin_feature)) / 6 
+
+            loss = L_texture + L_semantic
+
+            self.optimizer.zero_grad()
+            loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(self.bn.parameters(), 1.0)
+            self.optimizer.step()
+            train_loss += loss.item()
+            tbar.set_description('Epoch:%d, pre Train loss: %.3f' % (epoch, train_loss / (i + 1)))
+            pre_train_loss_list.append(loss.item())
+        
+        self.scheduler.step()
+        
+        return pre_train_loss_list
+
     def train(self, epoch):
         train_loss = 0.0
         self.model.train()
@@ -49,10 +113,10 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
 
-            output, texture_score = self.model(image)
+            output, invariant_score = self.model(image)
             loss = self.criterion(output, target.unsqueeze(1).float())
-            loss2 = torch.mean(torch.abs(texture_score))
-            loss += loss2
+            # loss2 = torch.mean(torch.abs(output - invariant_score))
+            # loss += loss2
             self.optimizer.zero_grad()
             loss.backward()
 
@@ -118,6 +182,8 @@ if __name__ == '__main__':
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
+    parser.add_argument("--pre_epochs", type=int, default=100, help="the number of pretrain epochs")
+    parser.add_argument("--pre_lr", type=float, default=0.001)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=4, metavar='N', help='dataloader threads')
@@ -132,19 +198,18 @@ if __name__ == '__main__':
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-    parser.add_argument('--backbone', type=str, default='DGAD', help="the backbone network")
+    parser.add_argument('--backbone', type=str, default='DGAD4', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=1)
-    parser.add_argument("--method", type=int, default=5)
 
-    # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
+    # args = parser.parse_args(["--backbone", "DGAD4", "--epochs", "2", "--lr", "0.00001", "--pre_epochs", "2", "--pre_lr", "0.001", "--domain_cnt", "3"])
     args = parser.parse_args()
     
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
+    model_name = f'backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr}'
+    file_name = f'backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICE"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -171,6 +236,17 @@ if __name__ == '__main__':
     val_AUROC_list = []
     val_AUPRC_list = []
     
+    if not os.path.exists(f"{args.experiment_dir}/{model_name}.tar"):
+        pre_train_results_loss = []
+        for epoch in range(0, trainer.args.pre_epochs):
+            pre_train_loss_list = trainer.pre_train(epoch)
+            pre_train_results_loss.append(pre_train_loss_list)
+        pre_train_results_loss = np.array(pre_train_results_loss),
+        trainer.save_weights(model_name)
+        np.savez(f'{args.experiment_dir}/{model_name}.npz',pre_train_results_loss = np.array(pre_train_results_loss))
+    
+    trainer.load_model(f"{args.experiment_dir}/{model_name}.tar")
+
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
         train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric = trainer.train(epoch)
