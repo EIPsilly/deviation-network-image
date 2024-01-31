@@ -132,7 +132,7 @@ if __name__ == '__main__':
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-    parser.add_argument('--backbone', type=str, default='DGAD5', help="the backbone network")
+    parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="1")
@@ -140,8 +140,8 @@ if __name__ == '__main__':
     parser.add_argument("--domain_cnt", type=int, default=1)
     parser.add_argument("--method", type=int, default=5)
 
-    # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
-    args = parser.parse_args()
+    args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
+    # args = parser.parse_args()
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
