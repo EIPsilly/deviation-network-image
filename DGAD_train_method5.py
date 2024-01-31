@@ -7,7 +7,7 @@ import argparse
 import os
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net import DGAD_net
+from modeling.DGAD_net_method5 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -140,8 +140,8 @@ if __name__ == '__main__':
     parser.add_argument("--domain_cnt", type=int, default=1)
     parser.add_argument("--method", type=int, default=5)
 
-    # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
-    args = parser.parse_args()
+    args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
+    # args = parser.parse_args()
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
         train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric = trainer.train(epoch)
-        if val_max_metric["AUROC"] < val_auroc:
+        if val_max_metric["AUROC"] <= val_auroc:
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
