@@ -5,3 +5,4 @@ results
 *.sh
 *.log
 .vscode
+*.out

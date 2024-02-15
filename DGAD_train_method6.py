@@ -2,12 +2,13 @@ from collections import Counter
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import argparse
 import os
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method5 import DGAD_net
+from modeling.DGAD_net_method6 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -36,23 +37,53 @@ class Trainer(object):
         if args.cuda:
             self.model = self.model.cuda()
             self.criterion = self.criterion.cuda()
+
+    def init_center(self):
+        self.model.eval()
+        tbar = tqdm(self.train_loader)
+        feature_list = []
+        for i, sample in enumerate(tbar):
+            idx, image, _, target, domain_label = sample
+
+            if self.args.cuda:
+                image, target = image.cuda(), target.cuda()
+
+            with torch.no_grad():
+                class_feature, _ = self.model.CL(image)
+            
+            feature_list.append(class_feature)
+        
+        self.model.center = torch.mean(F.normalize(torch.concat(feature_list)), dim=0)
     
     def train(self, epoch):
         train_loss = 0.0
         self.model.train()
         tbar = tqdm(self.train_loader)
         train_loss_list = []
+        sub_train_loss_list = []
         for i, sample in enumerate(tbar):
-            # image, target = sample['image'], sample['label']
-            idx, image, augimg, target = sample
+            idx, image, augimg, target, domain_label = sample
 
             if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
+                image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
 
             output, texture_score = self.model(image)
-            loss = self.criterion(output, target.unsqueeze(1).float())
-            loss2 = torch.mean(torch.abs(texture_score))
-            loss += loss2
+            devnet_loss = self.criterion(output, target.unsqueeze(1).float())
+            reg_loss = torch.mean(torch.abs(texture_score))
+            
+            class_feature, texture_feature = self.model.CL(image)
+            aug_class_feature, _ = self.model.CL(augimg)
+
+            class_feature = class_feature - self.model.center
+            aug_class_feature = aug_class_feature - self.model.center
+            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T)
+            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
+            
+            domain_similarity_matrix = self.model.domain_prototype(texture_feature)
+            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
+            
+            loss = devnet_loss + reg_loss + NCE_loss + PL_loss
+            
             self.optimizer.zero_grad()
             loss.backward()
 
@@ -61,16 +92,19 @@ class Trainer(object):
             train_loss += loss.item()
             tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-
+            sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(),])
+            
+        
         self.scheduler.step()
         val_loss_list, val_auroc, val_auprc = self.eval(self.val_loader)
         test_metric = self.test()
         
-        return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric
+        return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list
     
     def test(self):
         test_metric = {}
         for key in trainer.test_loader:
+            print(key)
             test_loss_list, test_auroc, test_auprc = self.eval(trainer.test_loader[key])
             test_metric[key] = {
                 "test_loss_list": test_loss_list,
@@ -87,8 +121,7 @@ class Trainer(object):
         total_target = np.array([])
         loss_list = []
         for i, sample in enumerate(tbar):
-            # image, target = sample['image'], sample['label']
-            idx, image, augimg, target = sample
+            idx, image, _, target, _ = sample
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
@@ -112,9 +145,9 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS")
+    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
     parser.add_argument("--lr",type=float,default=0.0002)
-    parser.add_argument("--batch_size", type=int, default=48, help="batch size used in SGD")
+    parser.add_argument("--batch_size", type=int, default=40, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
@@ -137,11 +170,11 @@ if __name__ == '__main__':
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-    parser.add_argument("--domain_cnt", type=int, default=1)
+    parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=5)
 
-    args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
-    # args = parser.parse_args()
+    # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
+    args = parser.parse_args()
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
@@ -167,19 +200,22 @@ if __name__ == '__main__':
     val_max_metric = {"AUROC": -1,
                       "AUPRC": -1}
     train_results_loss = []
+    sub_train_results_loss = []
     val_results_loss = []
     val_AUROC_list = []
     val_AUPRC_list = []
     
+    trainer.init_center()
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
-        train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric = trainer.train(epoch)
+        train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = trainer.train(epoch)
         if val_max_metric["AUROC"] <= val_auroc:
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
             # trainer.save_weights(f'{file_name}.pkl')
         train_results_loss.append(train_loss_list)
+        sub_train_results_loss.append(sub_train_loss_list)
         
         val_results_loss.append(val_loss_list)
         val_AUROC_list.append(val_auroc)
@@ -194,6 +230,7 @@ if __name__ == '__main__':
     np.savez(f'results{args.results_save_path}/{file_name}.npz',
              val_max_metric = np.array(val_max_metric),
              train_results_loss = np.array(train_results_loss),
+             sub_train_results_loss = np.array(sub_train_results_loss),
              val_results_loss = np.array(val_results_loss),
              val_AUROC_list = np.array(val_AUROC_list),
              val_AUPRC_list = np.array(val_AUPRC_list),
