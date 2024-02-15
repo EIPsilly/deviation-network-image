@@ -74,8 +74,8 @@ class Trainer(object):
             class_feature, texture_feature = self.model.CL(image)
             aug_class_feature, _ = self.model.CL(augimg)
 
-            class_feature = class_feature - self.model.center
-            aug_class_feature = aug_class_feature - self.model.center
+            class_feature = F.normalize(class_feature) - self.model.center
+            aug_class_feature = F.normalize(aug_class_feature) - self.model.center
             similarity_matrix = torch.matmul(class_feature, aug_class_feature.T)
             NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
             
