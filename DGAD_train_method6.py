@@ -40,9 +40,9 @@ class Trainer(object):
 
     def init_center(self):
         self.model.eval()
-        tbar = tqdm(self.train_loader)
+        # tbar = tqdm(self.train_loader)
         feature_list = []
-        for i, sample in enumerate(tbar):
+        for i, sample in enumerate(self.train_loader):
             idx, image, _, target, domain_label = sample
 
             if self.args.cuda:
@@ -56,12 +56,13 @@ class Trainer(object):
         self.model.center = torch.mean(F.normalize(torch.concat(feature_list)), dim=0)
     
     def train(self, epoch):
+        print(f"epoch:{epoch}")
         train_loss = 0.0
         self.model.train()
-        tbar = tqdm(self.train_loader)
+        # tbar = tqdm(self.train_loader)
         train_loss_list = []
         sub_train_loss_list = []
-        for i, sample in enumerate(tbar):
+        for i, sample in enumerate(self.train_loader):
             idx, image, augimg, target, domain_label = sample
 
             if self.args.cuda:
@@ -76,10 +77,10 @@ class Trainer(object):
 
             class_feature = F.normalize(class_feature) - self.model.center
             aug_class_feature = F.normalize(aug_class_feature) - self.model.center
-            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T)
+            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T) / self.args.tau1
             NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
             
-            domain_similarity_matrix = self.model.domain_prototype(texture_feature)
+            domain_similarity_matrix = self.model.domain_prototype(texture_feature) / self.args.tau2
             PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
             
             loss = devnet_loss + reg_loss + NCE_loss + PL_loss
@@ -90,7 +91,7 @@ class Trainer(object):
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
             train_loss += loss.item()
-            tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
+            # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
             sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(),])
             
@@ -115,12 +116,12 @@ class Trainer(object):
 
     def eval(self, dataset):
         self.model.eval()
-        tbar = tqdm(dataset, desc='\r')
+        # tbar = tqdm(dataset, desc='\r')
         test_loss = 0.0
         total_pred = np.array([])
         total_target = np.array([])
         loss_list = []
-        for i, sample in enumerate(tbar):
+        for i, sample in enumerate(dataset):
             idx, image, _, target, _ = sample
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
@@ -131,7 +132,7 @@ class Trainer(object):
             # loss += loss2
             test_loss += loss.item()
             loss_list.append(loss.item())
-            tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
+            # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
             total_pred = np.append(total_pred, output.data.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
         roc, pr = aucPerformance(total_pred, total_target)
@@ -149,8 +150,10 @@ if __name__ == '__main__':
     parser.add_argument("--lr",type=float,default=0.0002)
     parser.add_argument("--batch_size", type=int, default=40, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
-    parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
+    parser.add_argument("--epochs", type=int, default=2, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
+    parser.add_argument("--tau1",type=float,default=0.07)
+    parser.add_argument("--tau2",type=float,default=0.07)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=4, metavar='N', help='dataloader threads')
@@ -171,13 +174,13 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=5)
+    parser.add_argument("--method", type=int, default=6)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICE"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
