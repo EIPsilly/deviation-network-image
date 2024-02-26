@@ -89,7 +89,7 @@ class Trainer(object):
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.pre_optimizer.step()
             train_loss += loss.item()
-            tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
+            tbar.set_description('pre train Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             pre_train_loss_list.append(loss.item())
             sub_pre_train_loss_list.append([NCE_loss.item(),PL_loss.item(),])
         
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     parser.add_argument("--tau2",type=float,default=0.07)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
-    parser.add_argument('--workers', type=int, default=4, metavar='N', help='dataloader threads')
+    parser.add_argument('--workers', type=int, default=16, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
@@ -221,13 +221,12 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="1")
+    parser.add_argument("--gpu",type=str, default="0")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=7)
-
-    # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
-    args = parser.parse_args()
+    args = parser.parse_args(["--epochs", "20", "--lr", "0.0001","--pre_epochs", "50", "--pre_lr","0.001"])
+    # args = parser.parse_args()
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
@@ -266,9 +265,8 @@ if __name__ == '__main__':
             pre_train_loss_list, sub_pre_train_loss_list = trainer.pre_train(epoch)
             pre_train_results_loss.append(pre_train_loss_list)
             sub_pre_train_results_loss.append(sub_pre_train_loss_list)
-        pre_train_results_loss = np.array(pre_train_results_loss),
         trainer.save_weights(model_name)
-        np.savez(f'{args.experiment_dir}/{model_name}.npz',pre_train_results_loss = np.array(pre_train_results_loss))
+        np.savez(f'{args.experiment_dir}/{model_name}.npz',pre_train_results_loss = np.array(pre_train_results_loss),sub_pre_train_results_loss=np.array(sub_pre_train_results_loss))
     
     trainer.load_model(f"{args.experiment_dir}/{model_name}.tar")
     

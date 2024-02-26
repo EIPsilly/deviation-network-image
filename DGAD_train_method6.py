@@ -1,3 +1,4 @@
+from line_profiler import LineProfiler
 from collections import Counter
 import numpy as np
 import torch
@@ -148,7 +149,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
     parser.add_argument("--lr",type=float,default=0.0002)
-    parser.add_argument("--batch_size", type=int, default=40, help="batch size used in SGD")
+    parser.add_argument("--batch_size", type=int, default=30, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=2, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
@@ -156,7 +157,7 @@ if __name__ == '__main__':
     parser.add_argument("--tau2",type=float,default=0.07)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
-    parser.add_argument('--workers', type=int, default=4, metavar='N', help='dataloader threads')
+    parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
@@ -171,7 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="1")
+    parser.add_argument("--gpu",type=str, default="0")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=6)
@@ -211,6 +212,10 @@ if __name__ == '__main__':
     trainer.init_center()
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
+        # lp = LineProfiler()
+        # lp_wrapper = lp(trainer.train)
+        # train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = lp_wrapper(epoch)
+        # lp.print_stats()
         train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = trainer.train(epoch)
         if val_max_metric["AUROC"] <= val_auroc:
             val_max_metric["AUROC"] = val_auroc
