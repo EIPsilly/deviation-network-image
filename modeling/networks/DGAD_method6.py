@@ -237,9 +237,9 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         feature_a = self.layer1(x)
-        temp = self.layer2(feature_a)
-        temp = self.layer3(temp)
-        feature_d = self.layer4(temp)
+        feature_b = self.layer2(feature_a)
+        feature_c = self.layer3(feature_b)
+        feature_d = self.layer4(feature_c)
 
         # return [feature_a, feature_b, feature_c]
         return [feature_a, feature_d]

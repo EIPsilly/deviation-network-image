@@ -196,7 +196,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
     parser.add_argument("--lr",type=float,default=0.0002)
-    parser.add_argument("--batch_size", type=int, default=1, help="batch size used in SGD")
+    parser.add_argument("--batch_size", type=int, default=30, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=2, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
@@ -225,12 +225,12 @@ if __name__ == '__main__':
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=7)
-    args = parser.parse_args(["--epochs", "20", "--lr", "0.0001","--pre_epochs", "50", "--pre_lr","0.001"])
-    # args = parser.parse_args()
+    # args = parser.parse_args(["--epochs", "20", "--lr", "0.0001","--pre_epochs", "50", "--pre_lr","0.001"])
+    args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--pre_epochs", "0"])
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
-    os.environ["CUDA_VISIBLE_DEVICE"] = args.gpu
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     trainer = Trainer(args)

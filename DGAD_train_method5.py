@@ -51,7 +51,7 @@ class Trainer(object):
 
             output, texture_score = self.model(image)
             loss = self.criterion(output, target.unsqueeze(1).float())
-            loss2 = torch.mean(torch.abs(texture_score))
+            loss2 = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
             loss += loss2
             self.optimizer.zero_grad()
             loss.backward()
@@ -117,6 +117,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=48, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
+    parser.add_argument("--reg_lambda", type=int, default=5)
     parser.add_argument("--cnt", type=int, default=0)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
@@ -140,12 +141,12 @@ if __name__ == '__main__':
     parser.add_argument("--domain_cnt", type=int, default=1)
     parser.add_argument("--method", type=int, default=5)
 
-    # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "2", "--lr", "0.00001", "--domain_cnt", "3"])
-    args = parser.parse_args()
+    args = parser.parse_args(["--backbone", "DGAD", "--epochs", "30", "--lr", "5e-5", "--domain_cnt", "3", "--reg_lambda", "1"])
+    # args = parser.parse_args()
     
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
-    os.environ["CUDA_VISIBLE_DEVICE"] = args.gpu
+    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt},reg_lambda={args.reg_lambda}'
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     trainer = Trainer(args)

@@ -167,7 +167,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     file_name = f'EFDM,backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
-    os.environ["CUDA_VISIBLE_DEVICE"] = args.gpu
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     trainer = Trainer(args)
