@@ -7,7 +7,7 @@ import argparse
 import os
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method5 import DGAD_net
+from modeling.DGAD_net_method8 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -42,17 +42,18 @@ class Trainer(object):
         self.model.train()
         tbar = tqdm(self.train_loader)
         train_loss_list = []
+        sub_train_loss_list = []
         for i, sample in enumerate(tbar):
             # image, target = sample['image'], sample['label']
             idx, image, augimg, target = sample
 
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
-
-            output, texture_score = self.model(image)
-            loss = self.criterion(output, target.unsqueeze(1).float())
+            output, texture_score, orthogonality_loss = self.model(image)
+            loss1 = self.criterion(output, target.unsqueeze(1).float())
             loss2 = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
-            loss += loss2
+            loss3 = orthogonality_loss * self.args.orthogonality_lambda
+            loss =loss1 + loss2 + loss3
             self.optimizer.zero_grad()
             loss.backward()
 
@@ -61,12 +62,14 @@ class Trainer(object):
             train_loss += loss.item()
             tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
+            sub_train_loss_list.append(loss1.item(),loss2.item(),loss3.item())
+            
 
         self.scheduler.step()
         val_loss_list, val_auroc, val_auprc = self.eval(self.val_loader)
         test_metric = self.test()
         
-        return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric
+        return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list
     
     def test(self):
         test_metric = {}
@@ -92,7 +95,7 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output, invariant_score = self.model(image)
+                output, invariant_score, _ = self.model(image)
             loss = self.criterion(output, target.unsqueeze(1).float())
             # loss2 = torch.mean(torch.abs(output - invariant_score))
             # loss += loss2
@@ -117,7 +120,8 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=48, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
-    parser.add_argument("--reg_lambda", type=float, default=5.0)
+    parser.add_argument("--reg_lambda", type=float, default=1.0)
+    parser.add_argument("--orthogonality_lambda", type=float, default=1.0)
     parser.add_argument("--cnt", type=int, default=0)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
@@ -136,16 +140,16 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD5', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="1")
+    parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=1)
-    parser.add_argument("--method", type=int, default=5)
+    parser.add_argument("--method", type=int, default=8)
 
     # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "30", "--lr", "5e-5", "--domain_cnt", "3", "--reg_lambda", "1"])
     args = parser.parse_args()
     
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},cnt={args.cnt}'
+    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},otho_lambda={args.orthogonality_lambda}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},otho_lambda={args.orthogonality_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -168,19 +172,21 @@ if __name__ == '__main__':
     val_max_metric = {"AUROC": -1,
                       "AUPRC": -1}
     train_results_loss = []
+    sub_train_results_loss = []
     val_results_loss = []
     val_AUROC_list = []
     val_AUPRC_list = []
     
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
-        train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric = trainer.train(epoch)
+        train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = trainer.train(epoch)
         if val_max_metric["AUROC"] <= val_auroc:
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
             # trainer.save_weights(f'{file_name}.pkl')
         train_results_loss.append(train_loss_list)
+        sub_train_results_loss.append(sub_train_loss_list)
         
         val_results_loss.append(val_loss_list)
         val_AUROC_list.append(val_auroc)
@@ -199,5 +205,6 @@ if __name__ == '__main__':
              val_AUROC_list = np.array(val_AUROC_list),
              val_AUPRC_list = np.array(val_AUPRC_list),
              test_results_list = np.array(test_results_list),
+             sub_train_results_loss = np.array(sub_train_results_loss),
              test_metric = np.array(test_metric),
              args = np.array(args.__dict__),)
