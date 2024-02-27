@@ -62,7 +62,7 @@ class Trainer(object):
             train_loss += loss.item()
             tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-            sub_train_loss_list.append(loss1.item(),loss2.item(),loss3.item())
+            sub_train_loss_list.append([loss1.item(),loss2.item(),loss3.item()])
             
 
         self.scheduler.step()
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD5', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="3")
+    parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=1)
     parser.add_argument("--method", type=int, default=8)
