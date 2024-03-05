@@ -116,7 +116,7 @@ def augpacs(image, preprocess, severity=3, width=3, depth=-1, alpha=1.):
     return mixed
 
 class PACS_Dataset_with_domain_label(Dataset):
-    def __init__(self, x, y, transform=None, target_transform=None, augment_transform = None):
+    def __init__(self, args, x, y, transform=None, target_transform=None, augment_transform = None):
         self.image_paths = x
         self.labels = y
         self.transform = transform
@@ -134,6 +134,12 @@ class PACS_Dataset_with_domain_label(Dataset):
             img = Image.open(config["PACS_root"] + img_path).convert('RGB')
             img = resize_transform(img)
             self.img_list.append(img)
+        
+        self.semi_domain_labels = self.domain_labels.copy()
+        if "domain_label_ratio" in args:
+            from sklearn.model_selection import train_test_split
+            mask_set, unmask_set, mask_idx, unmask_idx = train_test_split(self.semi_domain_labels, np.arange(self.semi_domain_labels.shape[0]), test_size=args.domain_label_ratio, random_state=42, stratify=self.semi_domain_labels)
+            self.semi_domain_labels[mask_idx] = -1
         
         self.normal_idx = np.where(self.labels==0)[0]
         self.outlier_idx = np.where(self.labels==1)[0]
@@ -157,7 +163,7 @@ class PACS_Dataset_with_domain_label(Dataset):
         if self.target_transform is not None:
             label = self.target_transform(label)
 
-        return idx, img, augimg, label, self.domain_labels[idx]
+        return idx, img, augimg, label, self.domain_labels[idx], self.semi_domain_labels[idx]
     
 class PACS_with_domain_label():
 
@@ -191,16 +197,16 @@ class PACS_with_domain_label():
                         std=torch.tensor(std))
         ])
         
-        self.train_data = PACS_Dataset_with_domain_label(data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.train_data = PACS_Dataset_with_domain_label(args, data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
         unlabeled_idx = np.where(data["train_labels"] == 0)[0]
-        self.unlabeled_data = PACS_Dataset_with_domain_label(data["train_set_path"][unlabeled_idx], data["train_labels"][unlabeled_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
-        self.val_data = PACS_Dataset_with_domain_label(data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.unlabeled_data = PACS_Dataset_with_domain_label(args, data["train_set_path"][unlabeled_idx], data["train_labels"][unlabeled_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.val_data = PACS_Dataset_with_domain_label(args, data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
 
         logging.info("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))
         logging.info("y_val\t" + str(dict(sorted(Counter(data["val_labels"]).items()))))
         self.test_dict = {}
         for domain in ["photo", "art_painting", "cartoon", "sketch"]:
-            self.test_dict[domain] = PACS_Dataset_with_domain_label(data[f"test_{domain}"], data[f"test_{domain}_labels"], transform=test_transform, target_transform=None, augment_transform = augment_transform)
+            self.test_dict[domain] = PACS_Dataset_with_domain_label(args, data[f"test_{domain}"], data[f"test_{domain}_labels"], transform=test_transform, target_transform=None, augment_transform = augment_transform)
             logging.info(domain + "\ty_test\t" + str(dict(sorted(Counter(data[f"test_{domain}_labels"]).items()))))
             
         # for domain in os.listdir(f'{config["PACS_root"]}/test'):

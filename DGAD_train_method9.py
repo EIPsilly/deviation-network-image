@@ -1,3 +1,4 @@
+from torch.nn.parameter import Parameter
 import time
 from line_profiler import LineProfiler
 from collections import Counter
@@ -10,7 +11,7 @@ import argparse
 import os
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method6 import DGAD_net
+from modeling.DGAD_net_method9 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -33,8 +34,6 @@ class Trainer(object):
         self.model = DGAD_net(args)
         
         self.criterion = build_criterion(args.criterion)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
         if args.cuda:
             self.model = self.model.cuda()
@@ -44,6 +43,8 @@ class Trainer(object):
         self.model.eval()
         # tbar = tqdm(self.train_loader)
         feature_list = []
+        target_list = []
+        semi_domain_label_list = []
         for i, sample in enumerate(self.unlabeled_loader):
             idx, image, _, target, domain_label, semi_domain_label = sample
 
@@ -54,8 +55,21 @@ class Trainer(object):
                 class_feature, _ = self.model.CL(image)
             
             feature_list.append(class_feature)
+            target_list.append(target)
+            semi_domain_label_list.append(semi_domain_label)
         
-        self.model.center = F.normalize(torch.mean(torch.concat(feature_list), dim=0), dim=0)
+        semi_domain_label_list = torch.concat(semi_domain_label_list)
+        feature_list = torch.concat(feature_list)
+        target_list = torch.concat(target_list)
+        
+        self.model.center = F.normalize(torch.mean(feature_list[torch.where(target_list == 0)[0]], dim=0), dim=0)
+        temp = []
+        for i in range(self.args.domain_cnt):
+            temp.append(F.normalize(torch.mean(feature_list[torch.where(semi_domain_label_list == i)[0]], dim=0), dim=0))
+        
+        self.model.domain_prototype.weight = Parameter(torch.cat(temp).reshape(self.args.domain_cnt,-1))
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
     
     def train(self, epoch):
         self.epoch = epoch
@@ -78,7 +92,6 @@ class Trainer(object):
 
             output, texture_score = self.model(image)
             devnet_loss = self.criterion(output, target.unsqueeze(1).float())
-            # reg_loss = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
             reg_loss = torch.mean(torch.abs(texture_score)[torch.where(target == 1)[0]]) * self.args.reg_lambda
             
             class_feature, texture_feature = self.model.CL(image)
@@ -222,6 +235,7 @@ if __name__ == '__main__':
     
     parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
+    parser.add_argument("--domain_label_ratio", type=float, default=0.02)
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
@@ -230,11 +244,12 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=6)
+    parser.add_argument("--method", type=int, default=9)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
-    args = parser.parse_args()
-    # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
+    # args = parser.parse_args()
+    args = parser.parse_args(["--epochs", "40", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "3", "--cnt", "0"])
+    
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'

@@ -1,3 +1,4 @@
+import time
 from collections import Counter
 import numpy as np
 import torch
@@ -31,11 +32,10 @@ class Trainer(object):
         self.model = DGAD_net(args)
         
         self.criterion = build_criterion(args.criterion)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
         self.pre_optimizer = torch.optim.Adam(self.model.parameters(), lr=args.pre_lr, weight_decay=1e-5)
-        self.pre_scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
+        # self.pre_scheduler = torch.optim.lr_scheduler.StepLR(self.pre_optimizer, step_size=10, gamma=0.1)
+        self.pre_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.pre_optimizer, T_max=args.pre_epochs, eta_min = args.pre_lr * 1e-6)
 
         if args.cuda:
             self.model = self.model.cuda()
@@ -43,10 +43,10 @@ class Trainer(object):
 
     def init_center(self):
         self.model.eval()
-        tbar = tqdm(self.train_loader)
+        # tbar = tqdm(self.train_loader)
         feature_list = []
-        for i, sample in enumerate(tbar):
-            idx, image, _, target, domain_label = sample
+        for i, sample in enumerate(self.unlabeled_loader):
+            idx, image, _, target, domain_label, semi_domain_label = sample
 
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
@@ -56,16 +56,17 @@ class Trainer(object):
             
             feature_list.append(class_feature)
         
-        self.model.center = torch.mean(F.normalize(torch.concat(feature_list)), dim=0)
+        self.model.center = F.normalize(torch.mean(torch.concat(feature_list), dim=0), dim=0)
     
     def pre_train(self, epoch):
+        train_start = time.time()
         train_loss = 0.0
         self.model.train()
-        tbar = tqdm(self.unlabeled_loader)
+        # tbar = tqdm(self.unlabeled_loader)
         pre_train_loss_list = []
         sub_pre_train_loss_list = []
-        for i, sample in enumerate(tbar):
-            idx, image, augimg, target, domain_label = sample
+        for i, sample in enumerate(self.unlabeled_loader):
+            idx, image, augimg, target, domain_label, semi_domain_label = sample
 
             if self.args.cuda:
                 image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
@@ -75,11 +76,11 @@ class Trainer(object):
 
             class_feature = F.normalize(class_feature) - self.model.center
             aug_class_feature = F.normalize(aug_class_feature) - self.model.center
-            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T)
-            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
+            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T) / self.args.tau1
+            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda()) * self.args.NCE_lambda
             
-            domain_similarity_matrix = self.model.domain_prototype(texture_feature)
-            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
+            domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
+            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
             
             loss = NCE_loss + PL_loss
             
@@ -89,42 +90,32 @@ class Trainer(object):
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.pre_optimizer.step()
             train_loss += loss.item()
-            tbar.set_description('pre train Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
+            # tbar.set_description('pre train Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             pre_train_loss_list.append(loss.item())
             sub_pre_train_loss_list.append([NCE_loss.item(),PL_loss.item(),])
-        
+        print('pre train Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
         self.pre_scheduler.step()
+        end = time.time()
+        print(f'pre train time: {end - train_start}')
         
         return pre_train_loss_list, sub_pre_train_loss_list
     
     def train(self, epoch):
+        train_start = time.time()
         train_loss = 0.0
         self.model.train()
-        tbar = tqdm(self.train_loader)
+        # tbar = tqdm(self.train_loader)
         train_loss_list = []
         sub_train_loss_list = []
-        for i, sample in enumerate(tbar):
-            idx, image, augimg, target, domain_label = sample
+        for i, sample in enumerate(self.train_loader):
+            idx, image, augimg, target, domain_label, semi_domain_label = sample
 
             if self.args.cuda:
                 image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
 
             output, texture_score = self.model(image)
             devnet_loss = self.criterion(output, target.unsqueeze(1).float())
-            reg_loss = torch.mean(torch.abs(texture_score))
-            
-            # class_feature, texture_feature = self.model.CL(image)
-            # aug_class_feature, _ = self.model.CL(augimg)
-
-            # class_feature = F.normalize(class_feature) - self.model.center
-            # aug_class_feature = F.normalize(aug_class_feature) - self.model.center
-            # similarity_matrix = torch.matmul(class_feature, aug_class_feature.T)
-            # NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
-            
-            # domain_similarity_matrix = self.model.domain_prototype(texture_feature)
-            # PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
-            
-            # loss = devnet_loss + reg_loss + NCE_loss + PL_loss
+            reg_loss = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
             
             loss = devnet_loss + reg_loss
             
@@ -134,14 +125,18 @@ class Trainer(object):
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
             train_loss += loss.item()
-            tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
+            # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-            # sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(),])
             sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),])
         
         self.scheduler.step()
+
+        print('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
         val_loss_list, val_auroc, val_auprc = self.eval(self.val_loader)
+        test_start = time.time()
         test_metric = self.test()
+        end = time.time()
+        print(f'train time: {end - train_start}\t test time: {end - test_start}')
         
         return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list
     
@@ -159,13 +154,13 @@ class Trainer(object):
 
     def eval(self, dataset):
         self.model.eval()
-        tbar = tqdm(dataset, desc='\r')
+        # tbar = tqdm(dataset, desc='\r')
         test_loss = 0.0
         total_pred = np.array([])
         total_target = np.array([])
         loss_list = []
-        for i, sample in enumerate(tbar):
-            idx, image, _, target, _ = sample
+        for i, sample in enumerate(dataset):
+            idx, image, _, target, domain_label, semi_domain_label= sample
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
@@ -175,19 +170,20 @@ class Trainer(object):
             # loss += loss2
             test_loss += loss.item()
             loss_list.append(loss.item())
-            tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
+            # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
             total_pred = np.append(total_pred, output.data.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
         roc, pr = aucPerformance(total_pred, total_target)
+        print('Test loss: %.3f' % (test_loss / (i + 1)))
         return loss_list, roc, pr
 
     def save_weights(self, filename):
         torch.save(self.model.state_dict(), os.path.join(args.experiment_dir, filename + '.tar'))
     
     def load_model(self, file_name):
-        checkpoint = torch.load(file_name)
-        self.model = DGAD_net(args)
-        self.model.load_state_dict(checkpoint)
+        self.model.load_state_dict(torch.load(file_name))
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
         if args.cuda:
             self.model = self.model.cuda()
@@ -204,6 +200,9 @@ if __name__ == '__main__':
     parser.add_argument("--pre_lr", type=float, default=0.001)
     parser.add_argument("--tau1",type=float,default=0.07)
     parser.add_argument("--tau2",type=float,default=0.07)
+    parser.add_argument("--reg_lambda", type=float, default=1.0)
+    parser.add_argument("--NCE_lambda", type=float, default=1.0)
+    parser.add_argument("--PL_lambda", type=float, default=1.0)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=16, metavar='N', help='dataloader threads')
@@ -221,15 +220,16 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="0")
+    parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=7)
     # args = parser.parse_args(["--epochs", "20", "--lr", "0.0001","--pre_epochs", "50", "--pre_lr","0.001"])
-    args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--pre_epochs", "0"])
+    # args = parser.parse_args(["--epochs", "20", "--lr", "5e-5", "--pre_epochs", "0"])
+    args = parser.parse_args()
     
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},cnt={args.cnt}'
+    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},tau1={args.tau1},tau2={args.tau2},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},pre_epochs={args.pre_epochs},pre_lr={args.pre_lr},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -267,7 +267,6 @@ if __name__ == '__main__':
             sub_pre_train_results_loss.append(sub_pre_train_loss_list)
         trainer.save_weights(model_name)
         np.savez(f'{args.experiment_dir}/{model_name}.npz',pre_train_results_loss = np.array(pre_train_results_loss),sub_pre_train_results_loss=np.array(sub_pre_train_results_loss))
-    
     trainer.load_model(f"{args.experiment_dir}/{model_name}.tar")
     
     test_results_list = []
@@ -277,7 +276,7 @@ if __name__ == '__main__':
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
-            # trainer.save_weights(f'{file_name}.pkl')
+            
         train_results_loss.append(train_loss_list)
         sub_train_results_loss.append(sub_train_loss_list)
         
@@ -286,7 +285,7 @@ if __name__ == '__main__':
         val_AUPRC_list.append(val_auprc)
 
         test_results_list.append(test_metric)
-        
+
 
     # test_metric = trainer.test()
     
