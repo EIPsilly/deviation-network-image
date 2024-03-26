@@ -225,8 +225,7 @@ class PACS_Data():
         for domain_type, test_set in self.test_dict.items():
             self.test_loader_dict[domain_type] = DataLoader(dataset=test_set, batch_size=batch_size, shuffle=shuffle_test, num_workers=num_workers, drop_last=False)
         
-        if self.train_binary == False:
-            self.unlabeled_loader = DataLoader(dataset=self.unlabeled_data, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers, drop_last=False)
+        self.unlabeled_loader = DataLoader(dataset=self.unlabeled_data, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers, drop_last=False)
 
         return self.train_loader, self.val_loader, self.test_loader_dict
     

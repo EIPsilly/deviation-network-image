@@ -193,7 +193,7 @@ class Trainer(object):
     def save_weights(self, filename):
         self.model = DGAD_net(args)
         self.model.encoder = self.encoder
-        self.model.bn = self.bn
+        self.model.shallow_conv = self.shallow_conv
         torch.save(self.model.state_dict(), os.path.join(args.experiment_dir, filename + '.tar'))
 
 if __name__ == '__main__':

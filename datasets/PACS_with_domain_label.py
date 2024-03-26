@@ -200,6 +200,11 @@ class PACS_with_domain_label():
         self.train_data = PACS_Dataset_with_domain_label(args, data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
         unlabeled_idx = np.where(data["train_labels"] == 0)[0]
         self.unlabeled_data = PACS_Dataset_with_domain_label(args, data["train_set_path"][unlabeled_idx], data["train_labels"][unlabeled_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        
+        # if "unsupervised" in args:
+        #     normal_idx = np.where(data["val_labels"] == 0)[0]
+        #     self.val_data = PACS_Dataset_with_domain_label(args, data["val_set_path"][normal_idx], data["val_labels"][normal_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        # else:
         self.val_data = PACS_Dataset_with_domain_label(args, data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
 
         logging.info("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))
@@ -235,8 +240,7 @@ class PACS_with_domain_label():
         for domain_type, test_set in self.test_dict.items():
             self.test_loader_dict[domain_type] = DataLoader(dataset=test_set, batch_size=batch_size, shuffle=shuffle_test, num_workers=num_workers, drop_last=False)
         
-        if self.train_binary == False:
-            self.unlabeled_loader = DataLoader(dataset=self.unlabeled_data, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers, drop_last=False)
+        self.unlabeled_loader = DataLoader(dataset=self.unlabeled_data, batch_size=batch_size, shuffle=shuffle_train, num_workers=num_workers, drop_last=False)
 
         return self.train_loader, self.val_loader, self.test_loader_dict
     
