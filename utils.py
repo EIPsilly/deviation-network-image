@@ -13,9 +13,9 @@ August4–8, 2019, Anchorage, AK, USA.ACM, New York, NY, USA, 10 pages. https://
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 
-def aucPerformance(mse, labels, prt=True):
-    roc_auc = roc_auc_score(labels, mse)
-    ap = average_precision_score(labels, mse)
+def aucPerformance(predict, labels, prt=True):
+    roc_auc = roc_auc_score(labels, predict)
+    ap = average_precision_score(labels, predict)
     if prt:
         print("AUC-ROC: %.4f, AUC-PR: %.4f" % (roc_auc, ap))
     return roc_auc, ap;
