@@ -12,23 +12,10 @@ import argparse
 import os
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method9 import DGAD_net
+from modeling.DGAD_net_method11 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
-import random
-
-def set_seed(seed):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.enabled = False
-    # some cudnn methods can be random even after fixing the seed
-    # unless you tell it to be deterministic
-    # torch.backends.cudnn.deterministic = True
 
 def loss_fucntion(a, b):
     cos_loss = torch.nn.CosineSimilarity()
@@ -72,6 +59,7 @@ class Trainer(object):
 
             with torch.no_grad():
                 _, class_feature = self.model.encoder(image)
+                
                 class_feature = self.model.avgpool(class_feature)
                 class_feature = torch.flatten(class_feature, 1)
                 class_feature = self.model.origin_fc(class_feature)
@@ -86,12 +74,18 @@ class Trainer(object):
         target_list = torch.concat(target_list)
         domain_label_list = torch.concat(domain_label_list)
         
+        # np.savez("init_feature.npz",
+        #          feature_list = feature_list.cpu().numpy(),
+        #          target_list = target_list.cpu().numpy(),
+        #          domain_label_list = domain_label_list.cpu().numpy())
+        
         # self.model.center = F.normalize(torch.mean(feature_list[torch.where(target_list == 0)[0]], dim=0), dim=0)
         self.model.center = torch.mean(feature_list[torch.where(target_list == 0)[0]], dim=0)
         
         estimator = KMeans(n_clusters=3)  # 构造聚类器
         estimator.fit(feature_list.cpu().numpy())
         predict = estimator.predict(feature_list.cpu().numpy())
+        # predict = domain_label_list
 
         self.model.domain_prototype = []
         for i in range(self.args.domain_cnt):
@@ -101,14 +95,6 @@ class Trainer(object):
         # self.model.domain_prototype = torch.rand(self.args.domain_cnt, self.model.center.shape[0]).cuda()
         # scale = torch.norm(self.model.domain_prototype, dim=1) / torch.norm(self.model.center)
         # self.model.domain_prototype = self.model.domain_prototype / scale.reshape(-1, 1)
-
-        np.savez(f"results/intermediate_results/method{self.args.method}/init_embedding/{file_name}.npz",
-                 feature_list = feature_list.cpu().numpy(),
-                 target_list = target_list.cpu().numpy(),
-                 domain_label_list = domain_label_list.cpu().numpy(),
-                 domain_prototype = self.model.domain_prototype.cpu().numpy(),
-                 center = self.model.center.cpu().numpy(),
-                 )
     
     def update(self, epoch):
         self.model.eval()
@@ -117,6 +103,7 @@ class Trainer(object):
         feature_list = []
         target_list = []
         semi_domain_label_list = []
+        domain_label_list = []
         for i, sample in enumerate(self.unlabeled_loader):
             idx, image, _, target, domain_label, semi_domain_label = sample
 
@@ -138,6 +125,7 @@ class Trainer(object):
             feature_list.append(texture_feature)
             category_list.append(category)
             target_list.append(target)
+            domain_label_list.append(domain_label)
             semi_domain_label_list.append(semi_domain_label)
         
         semi_domain_label_list = torch.concat(semi_domain_label_list)
@@ -309,16 +297,12 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=9)
+    parser.add_argument("--method", type=int, default=11)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
-    # args = parser.parse_args(["--normal_class", "3", "--anomaly_class", "0","1","2","4","5","6"])
     # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--origin_svdd_lambda", "2.0", "--class_svdd_lambda", "1.0", "--align_lambda", "1.0", "--gpu", "1", "--cnt", "0"])
     
-    print("normal_class", args.normal_class)
-    print("anomaly_class", args.anomaly_class)
-
     # model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},origin_svdd_lambda={args.origin_svdd_lambda},class_svdd_lambda={args.class_svdd_lambda},align_lambda={args.align_lambda},beta_begin={args.beta_begin},beta_end={args.beta_end}'
     # file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},origin_svdd_lambda={args.origin_svdd_lambda},class_svdd_lambda={args.class_svdd_lambda},align_lambda={args.align_lambda},beta_begin={args.beta_begin},beta_end={args.beta_end},cnt={args.cnt}'
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},origin_svdd_lambda={args.origin_svdd_lambda},class_svdd_lambda={args.class_svdd_lambda},align_lambda={args.align_lambda},beta={args.beta}'

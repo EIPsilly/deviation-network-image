@@ -138,7 +138,7 @@ class PACS_Dataset_with_domain_label(Dataset):
         self.semi_domain_labels = self.domain_labels.copy()
         if "domain_label_ratio" in args:
             from sklearn.model_selection import train_test_split
-            mask_set, unmask_set, mask_idx, unmask_idx = train_test_split(self.semi_domain_labels, np.arange(self.semi_domain_labels.shape[0]), test_size=args.domain_label_ratio, random_state=42, stratify=self.semi_domain_labels)
+            mask_set, unmask_set, mask_idx, unmask_idx = train_test_split(self.semi_domain_labels, np.arange(self.semi_domain_labels.shape[0]), test_size=max(3 / self.semi_domain_labels.shape[0], args.domain_label_ratio), random_state=42, stratify=self.semi_domain_labels)
             self.semi_domain_labels[mask_idx] = -1
         
         self.normal_idx = np.where(self.labels==0)[0]
