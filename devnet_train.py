@@ -106,6 +106,7 @@ if __name__ == '__main__':
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
     parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
+    parser.add_argument("--pretrained", type=int, default=1)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=4, metavar='N', help='dataloader threads')
@@ -129,7 +130,11 @@ if __name__ == '__main__':
 
     # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "15", "--lr", "0.00001"])
     args = parser.parse_args()
-    
+    if args.pretrained == 1:
+        args.pretrained = True
+    else:
+        args.pretrained = False
+
     file_name = f'backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 

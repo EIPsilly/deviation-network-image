@@ -35,9 +35,9 @@ class feature_resnet50(nn.Module):
 
 
 class feature_wide_resnet50_2(nn.Module):
-    def __init__(self):
+    def __init__(self, args):
         super(feature_wide_resnet50_2, self).__init__()
-        self.net = models.wide_resnet50_2(pretrained=True)
+        self.net = models.wide_resnet50_2(pretrained=args.pretrained)
     def forward(self, x):
         x = self.net.conv1(x)
         x = self.net.bn1(x)

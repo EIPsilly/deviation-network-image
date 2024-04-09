@@ -215,6 +215,7 @@ if __name__ == '__main__':
     parser.add_argument("--reg_lambda", type=float, default=1.0)
     parser.add_argument("--NCE_lambda", type=float, default=1.0)
     parser.add_argument("--PL_lambda", type=float, default=1.0)
+    parser.add_argument("--pretrained", type=int, default=1)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
@@ -242,6 +243,11 @@ if __name__ == '__main__':
     args = parser.parse_args(["--epochs", "40", "--lr", "0.0001", "--normal", "1", "--anomaly_class", "0", "2", "3", "4", "5", "6"])
     # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
     
+    if args.pretrained == 1:
+        args.pretrained = True
+    else:
+        args.pretrained = False
+
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu

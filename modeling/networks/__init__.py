@@ -17,37 +17,37 @@ def build_feature_extractor(args):
         return feature_resnet50()
     elif backbone == "wide_resnet50_2":
         print("Feature extractor: wide_resnet50_2")
-        return feature_wide_resnet50_2()
+        return feature_wide_resnet50_2(args)
     
     elif backbone == "DGAD":
         print("Feature extractor: ResNet-DGAD")
         from .DGAD import wide_resnet50_2
-        net = wide_resnet50_2(pretrained=True)
+        net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
     elif backbone == "DGAD4":
         print("Feature extractor: ResNet-DGAD4")
         from .DGAD_method4 import wide_resnet50_2
-        net = wide_resnet50_2(pretrained=True)
+        net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
     elif backbone == "DGAD5":
         print("Feature extractor: ResNet-DGAD5")
         from .DGAD_method5 import wide_resnet50_2
-        net = wide_resnet50_2(pretrained=True)
+        net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
     elif backbone == "DGAD6":
         print("Feature extractor: ResNet-DGAD6")
         from .DGAD_method6 import wide_resnet50_2
-        net = wide_resnet50_2(pretrained=True)
+        net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
     elif backbone == "DGAD9":
         print("Feature extractor: ResNet-DGAD9")
         from .DGAD_method9 import wide_resnet50_2
-        net = wide_resnet50_2(pretrained=True)
+        net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
     elif backbone == "EFDM_DGAD":
         print("Feature extractor: EFDM_DGAD")
         from .resnet_TTA import wide_resnet50_2
-        net = wide_resnet50_2(pretrained=True)
+        net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
     elif backbone == "VAE_DEVNET":
         print("Feature extractor: VAE_DEVNET")
