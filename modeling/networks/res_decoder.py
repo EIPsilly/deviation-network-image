@@ -124,6 +124,8 @@ class ResNet(nn.Module):
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
+        self.fc = nn.Linear(num_classes, 512 * block.expansion)
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
@@ -182,23 +184,27 @@ class ResNet(nn.Module):
         layers.append(last_block)
         return nn.Sequential(*layers)
 
-    def _forward_impl(self, x: Tensor, indices) -> Tensor:
+    def _forward_impl(self, input: Tensor, indices) -> Tensor:
         # See note [TorchScript super()]
+        x = self.fc(input)
+        x = x.view(x.size(0), x.size(1), 1, 1)
         x = self.unsample(x)
-        x = self.layer4(x)
-        x = self.layer3(x)
-        x = self.layer2(x)
-        x = self.layer1(x)
+        feature_a = self.layer4(x)  #2048*8*8->1024*16*16
+        feature_b = self.layer3(feature_a)  #1024*16*16->512*32*32
+        feature_c = self.layer2(feature_b)  #512*32*32->256*64*64
+        feature_d = self.layer1(feature_c)  #256*64*64->64*64*64
 
         # print(x.shape)
-        x = self.unpool(x, indices)
+        x = self.unpool(feature_d, indices)
         x = self.de_conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        return x
+        return [feature_c, feature_b, feature_a, ], x
 
     def _forward_cnns_only(self, x: Tensor) -> Tensor:
         # See note [TorchScript super()]
+        x = self.fc(x)
+        x = x.view(x.size(0), x.size(1), 1, 1)
         x = self.unsample(x)
         x = self.layer4(x)
         x = self.layer3(x)

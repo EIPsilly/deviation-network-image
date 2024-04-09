@@ -8,7 +8,7 @@ class DGAD_net(nn.Module):
     def __init__(self, args):
         super(DGAD_net, self).__init__()
         self.args = args
-        self.encoder, self.shallow_conv = build_feature_extractor(self.args.backbone)
+        self.encoder, self.shallow_conv = build_feature_extractor(self.args)
         self.conv = nn.Conv2d(in_channels=NET_OUT_DIM[self.args.backbone], out_channels=1, kernel_size=1, padding=0)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))

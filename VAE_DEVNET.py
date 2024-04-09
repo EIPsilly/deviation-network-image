@@ -1,3 +1,6 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+
 import time
 from line_profiler import LineProfiler
 from collections import Counter
@@ -7,7 +10,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import argparse
-import os
 
 from dataloaders.dataloader import build_dataloader
 from modeling.VAE_DEVNET import SemiADNet
@@ -40,22 +42,6 @@ class Trainer(object):
             self.model = self.model.cuda()
             self.criterion = self.criterion.cuda()
 
-    def init_center(self):
-        self.model.eval()
-        # tbar = tqdm(self.train_loader)
-        feature_list = []
-        for i, sample in enumerate(self.unlabeled_loader):
-            idx, image, _, target, domain_label, semi_domain_label = sample
-
-            if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
-
-            with torch.no_grad():
-                class_feature, _ = self.model.CL(image)
-            
-            feature_list.append(class_feature)
-        
-        self.model.center = F.normalize(torch.mean(torch.concat(feature_list), dim=0), dim=0)
     
     def train(self, epoch):
         self.epoch = epoch
@@ -76,28 +62,19 @@ class Trainer(object):
             if self.args.cuda:
                 image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
 
-            output, texture_score = self.model(image)
-            devnet_loss = self.criterion(output, target.unsqueeze(1).float())
-            # reg_loss = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
-            reg_loss = torch.mean(torch.abs(texture_score)[torch.where(target == 1)[0]]) * self.args.reg_lambda
+            rec_img, mu_prior, logvar_prior, mu, logvar, z_feature, score, reconstruction_loss = self.model(image, domain_label)
             
-            class_feature, texture_feature = self.model.CL(image)
-            aug_class_feature, _ = self.model.CL(augimg)
+            kl_div = 0.5 * torch.sum(logvar_prior - logvar - 1 + torch.exp(logvar - logvar_prior) + (mu_prior - mu) ** 2 / torch.exp(logvar_prior), dim=-1)
+            # kl_div = torch.max(torch.tensor(5.0), kl_div)
+            # if epoch < 2:
+            #     kl_div = kl_div * 0
+            kl_div = torch.mean(kl_div)
 
-            class_feature_list.append(class_feature.cpu().detach().numpy())
-            texture_feature_list.append(texture_feature.cpu().detach().numpy())
-            target_list.append(target.cpu().detach().numpy())
-            domain_label_list.append(domain_label.cpu().detach().numpy())
+            devnet_loss = self.criterion(score, target.unsqueeze(1).float())
 
-            class_feature = F.normalize(class_feature) - self.model.center
-            aug_class_feature = F.normalize(aug_class_feature) - self.model.center
-            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T) / self.args.tau1
-            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda()) * self.args.NCE_lambda
-            
-            domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
-            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
-
-            loss = devnet_loss + reg_loss + NCE_loss + PL_loss
+            # reconstruction_loss = F.mse_loss(rec_img, image, reduction="mean")
+            # torch.sum((rec_img - image)**2) / (rec_img.shape[0] * rec_img.shape[1])
+            loss = devnet_loss + kl_div + reconstruction_loss
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -107,7 +84,7 @@ class Trainer(object):
             train_loss += loss.item()
             # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-            sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(),])
+            sub_train_loss_list.append([devnet_loss.item(), kl_div.item(), reconstruction_loss.item(), ])
             
         self.scheduler.step()
         self.domain_key = "val"
@@ -162,10 +139,13 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output, invariant_score = self.model(image)
-                class_feature, texture_feature = self.model.CL(image)
-                class_feature_list.append(class_feature.cpu().detach().numpy())
-                texture_feature_list.append(texture_feature.cpu().detach().numpy())
+                rec_img, mu_prior, logvar_prior, mu, logvar, z_feature, output0, reg_loss = self.model(image, torch.zeros_like(domain_label).cuda())
+                rec_img, mu_prior, logvar_prior, mu, logvar, z_feature, output1, reg_loss = self.model(image, torch.zeros_like(domain_label).cuda() + 1)
+                rec_img, mu_prior, logvar_prior, mu, logvar, z_feature, output2, reg_loss = self.model(image, torch.zeros_like(domain_label).cuda() + 2)
+                output = torch.max(torch.max(output0, output1), output2)
+                # class_feature, texture_feature = self.model.CL(image)
+                # class_feature_list.append(class_feature.cpu().detach().numpy())
+                # texture_feature_list.append(texture_feature.cpu().detach().numpy())
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
 
@@ -175,7 +155,7 @@ class Trainer(object):
             test_loss += loss.item()
             loss_list.append(loss.item())
             # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
-            total_pred = np.append(total_pred, output.data.cpu().numpy())
+            total_pred = np.append(total_pred, output.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
         roc, pr = aucPerformance(total_pred, total_target)
         if self.args.save_embedding == 1:
@@ -192,8 +172,6 @@ class Trainer(object):
 
     def save_weights(self, filename):
         self.model = SemiADNet(args)
-        self.model.encoder = self.encoder
-        self.model.shallow_conv = self.shallow_conv
         torch.save(self.model.state_dict(), os.path.join(args.experiment_dir, filename + '.tar'))
 
 if __name__ == '__main__':
@@ -219,6 +197,8 @@ if __name__ == '__main__':
     parser.add_argument('--classname', type=str, default='carpet', help="the subclass of the datasets")
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
+    parser.add_argument("--BalancedBatchSampler", type=int, default=1)
+    
     
     parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
@@ -236,8 +216,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
     
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -265,13 +245,8 @@ if __name__ == '__main__':
     val_AUROC_list = []
     val_AUPRC_list = []
     
-    trainer.init_center()
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
-        # lp = LineProfiler()
-        # lp_wrapper = lp(trainer.train)
-        # train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = lp_wrapper(epoch)
-        # lp.print_stats()
         train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = trainer.train(epoch)
         if val_max_metric["AUROC"] <= val_auroc:
             val_max_metric["AUROC"] = val_auroc

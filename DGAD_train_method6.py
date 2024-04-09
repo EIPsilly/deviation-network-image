@@ -78,8 +78,9 @@ class Trainer(object):
 
             output, texture_score = self.model(image)
             devnet_loss = self.criterion(output, target.unsqueeze(1).float())
+            reg_loss = self.criterion(texture_score, target.unsqueeze(1).float()) * self.args.reg_lambda
             # reg_loss = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
-            reg_loss = torch.mean(torch.abs(texture_score)[torch.where(target == 1)[0]]) * self.args.reg_lambda
+            reg_loss = torch.mean(torch.abs(texture_score)[torch.where(target == 0)[0]]) * self.args.reg_lambda
             
             class_feature, texture_feature = self.model.CL(image)
             aug_class_feature, _ = self.model.CL(augimg)
@@ -112,10 +113,15 @@ class Trainer(object):
         self.scheduler.step()
         self.domain_key = "val"
         val_loss_list, val_auroc, val_auprc, total_pred, total_target = self.eval(self.val_loader)
-        test_start = time.time()
-        test_metric = self.test()
-        end = time.time()
-        print(f'train time: {end - train_start}\t test time: {end - test_start}')
+        if epoch %  5 == 0:
+            test_start = time.time()
+            test_metric = self.test()
+            end = time.time()
+            print(f'train time: {end - train_start}\t test time: {end - test_start}')
+        else:
+            test_metric=None
+            end = time.time()
+            print(f'train time: {end - train_start}')
 
         if self.args.save_embedding == 1:
             np.savez(f"./results/intermediate_results/epoch={epoch}.npz",
@@ -189,12 +195,12 @@ class Trainer(object):
                      AUPRC=np.array(pr),
                      )
         return loss_list, roc, pr, total_pred, total_target
+    
+    def load_weights(self, filename):
+        self.model.load_state_dict(torch.load(os.path.join(args.experiment_dir, filename)))
 
     def save_weights(self, filename):
-        self.model = DGAD_net(args)
-        self.model.encoder = self.encoder
-        self.model.shallow_conv = self.shallow_conv
-        torch.save(self.model.state_dict(), os.path.join(args.experiment_dir, filename + '.tar'))
+        torch.save(self.model.state_dict(), os.path.join(args.experiment_dir, filename))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -227,13 +233,13 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="3")
+    parser.add_argument("--gpu",type=str, default="2")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=6)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
-    args = parser.parse_args()
+    args = parser.parse_args(["--epochs", "40", "--lr", "0.0001", "--normal", "1", "--anomaly_class", "0", "2", "3", "4", "5", "6"])
     # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
     
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
@@ -277,7 +283,7 @@ if __name__ == '__main__':
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
-            # trainer.save_weights(f'{file_name}.pkl')
+            trainer.save_weights(f'{file_name}.pt')
         train_results_loss.append(train_loss_list)
         sub_train_results_loss.append(sub_train_loss_list)
         
@@ -286,8 +292,9 @@ if __name__ == '__main__':
         val_AUPRC_list.append(val_auprc)
 
         test_results_list.append(test_metric)
-        
-
+    
+    trainer.load_weights(f'{file_name}.pt')
+    val_max_metric["metric"] = trainer.test()
     # test_metric = trainer.test()
     
     print(f'results{args.results_save_path}/{file_name}.npz')

@@ -125,7 +125,7 @@ class PACS_Dataset_with_domain_label(Dataset):
         
         self.img_list = []
         resize_transform = transforms.Compose([
-            transforms.Resize((256, 256)),
+            transforms.Resize((253, 253)),
             ])
         self.domain_labels = np.empty_like(self.labels)
 
@@ -180,7 +180,7 @@ class PACS_with_domain_label():
 
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
-        image_size = 256
+        image_size = 253
 
         train_transform = transforms.Compose([
                 transforms.ToTensor(),

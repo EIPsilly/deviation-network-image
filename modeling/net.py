@@ -8,7 +8,7 @@ class SemiADNet(nn.Module):
     def __init__(self, args):
         super(SemiADNet, self).__init__()
         self.args = args
-        self.feature_extractor = build_feature_extractor(self.args.backbone)
+        self.feature_extractor = build_feature_extractor(self.args)
         if isinstance(self.feature_extractor, tuple):
             self.encoder = self.feature_extractor[0]
             self.bn = self.feature_extractor[1]

@@ -35,10 +35,16 @@ def build_dataloader(args, **kwargs):
     if args.data_name == "PACS_with_domain_label":
         data = PACS_with_domain_label(args)
         train_set = data.train_data
-        train_loader = DataLoader(train_set,
-                                worker_init_fn=worker_init_fn_seed,
-                                batch_sampler=BalancedBatchSampler(args, train_set),
-                                **kwargs)
+        if ("BalancedBatchSampler" in args) and (args.BalancedBatchSampler == 0):
+            train_loader = DataLoader(train_set,
+                                      worker_init_fn=worker_init_fn_seed,
+                                      batch_size=args.batch_size,
+                                      **kwargs)
+        else:
+            train_loader = DataLoader(train_set,
+                                      worker_init_fn=worker_init_fn_seed,
+                                      batch_sampler=BalancedBatchSampler(args, train_set),
+                                      **kwargs)
         val_data = data.val_data
         val_loader = DataLoader(val_data,
                                 batch_size=args.batch_size,

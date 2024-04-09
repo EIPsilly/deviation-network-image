@@ -8,13 +8,6 @@ class MLP(nn.Module):
     def __init__(self, args, dims):
         super(MLP, self).__init__()
         self.args = args
-        # if self.args.backbone == "mlp4":
-        #     dims = [NET_OUT_DIM[self.args.backbone], 1000, 256, 64]
-        # elif self.args.backbone == "mlp2":
-        #     dims = [NET_OUT_DIM[self.args.backbone], 64]
-        # elif self.args.backbone == "mlp1":
-        #     dims = [NET_OUT_DIM[self.args.backbone]]
-        
         layers = [nn.Linear(dims[i - 1], dims[i], bias=False) for i in range(1, len(dims))]
         self.hidden = nn.ModuleList(layers)
 
@@ -27,7 +20,7 @@ class DGAD_net(nn.Module):
     def __init__(self, args):
         super(DGAD_net, self).__init__()
         self.args = args
-        self.encoder, self.shallow_conv = build_feature_extractor(self.args.backbone)
+        self.encoder, self.shallow_conv = build_feature_extractor(self.args)
         self.conv = nn.Conv2d(in_channels=NET_OUT_DIM[self.args.backbone], out_channels=1, kernel_size=1, padding=0)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
