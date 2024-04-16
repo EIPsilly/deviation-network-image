@@ -172,9 +172,9 @@ class PACS_with_domain_label():
         normal_class = "".join(list(map(str,args.normal_class)))
         anomaly_class = "".join(list(map(str,args.anomaly_class)))
         if args.domain_cnt == 1:
-            train_path = f'../domain-generalization-for-anomaly-detection/data/one_source_domain/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
+            train_path = f'../domain-generalization-for-anomaly-detection/data/pacs/semi-supervised/1domain/20240412-PACS-{normal_class}-{anomaly_class}.npz'
         elif args.domain_cnt == 3:
-            train_path = f'../domain-generalization-for-anomaly-detection/data/three_source_domain/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
+            train_path = f'../domain-generalization-for-anomaly-detection/data/pacs/semi-supervised/3domain/20240412-PACS-{normal_class}-{anomaly_class}.npz'
         
         data = np.load(train_path, allow_pickle=True)
 
@@ -209,10 +209,13 @@ class PACS_with_domain_label():
 
         logging.info("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))
         logging.info("y_val\t" + str(dict(sorted(Counter(data["val_labels"]).items()))))
+        print("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))
+        print("y_val\t" + str(dict(sorted(Counter(data["val_labels"]).items()))))
         self.test_dict = {}
         for domain in ["photo", "art_painting", "cartoon", "sketch"]:
             self.test_dict[domain] = PACS_Dataset_with_domain_label(args, data[f"test_{domain}"], data[f"test_{domain}_labels"], transform=test_transform, target_transform=None, augment_transform = augment_transform)
             logging.info(domain + "\ty_test\t" + str(dict(sorted(Counter(data[f"test_{domain}_labels"]).items()))))
+            print(domain + "\ty_test\t" + str(dict(sorted(Counter(data[f"test_{domain}_labels"]).items()))))
             
         # for domain in os.listdir(f'{config["PACS_root"]}/test'):
         #     # if domain in self.in_domain_type:

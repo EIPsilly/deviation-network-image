@@ -1,3 +1,5 @@
+import os
+
 import time
 from line_profiler import LineProfiler
 from collections import Counter
@@ -7,7 +9,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import argparse
-import os
 
 from dataloaders.dataloader import build_dataloader
 from modeling.DGAD_net_method6 import DGAD_net
@@ -32,13 +33,15 @@ class Trainer(object):
         
         self.model = DGAD_net(args)
         
-        self.criterion = build_criterion(args.criterion)
+        self.criterion = build_criterion(args.criterion, args)
+        self.uniform_criterion = build_criterion("uniform", args)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
         if args.cuda:
             self.model = self.model.cuda()
             self.criterion = self.criterion.cuda()
+            self.uniform_criterion = self.uniform_criterion.cuda()
 
     def init_center(self):
         self.model.eval()
@@ -78,12 +81,11 @@ class Trainer(object):
 
             output, texture_score = self.model(image)
             devnet_loss = self.criterion(output, target.unsqueeze(1).float())
-            # reg_loss = self.criterion(texture_score, target.unsqueeze(1).float()) * self.args.reg_lambda
-            # reg_loss = torch.mean(torch.abs(texture_score)) * self.args.reg_lambda
-            reg_loss = torch.mean(torch.abs(texture_score)[torch.where(target == 0)[0]]) * self.args.reg_lambda
+            
+            reg_loss = self.uniform_criterion(texture_score)
             
             class_feature, texture_feature = self.model.CL(image)
-            aug_class_feature, _ = self.model.CL(augimg)
+            aug_class_feature, aug_texture_feature = self.model.CL(augimg)
 
             class_feature_list.append(class_feature.cpu().detach().numpy())
             texture_feature_list.append(texture_feature.cpu().detach().numpy())
@@ -97,6 +99,9 @@ class Trainer(object):
             
             domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
             PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
+
+            domain_similarity_matrix = self.model.domain_prototype(F.normalize(aug_texture_feature)) / self.args.tau2
+            PL_loss += nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
 
             loss = devnet_loss + reg_loss + NCE_loss + PL_loss
             
@@ -216,14 +221,15 @@ if __name__ == '__main__':
     parser.add_argument("--NCE_lambda", type=float, default=1.0)
     parser.add_argument("--PL_lambda", type=float, default=1.0)
     parser.add_argument("--pretrained", type=int, default=1)
-    parser.add_argument("--test_epoch", type=int, default=5)
+    parser.add_argument("--test_epoch", type=int, default=1)
+    parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
-    parser.add_argument('--experiment_dir', type=str, default='./experiment', help="experiment dir root")
+    parser.add_argument('--experiment_dir', type=str, default='/DEBUG', help="experiment dir root")
     parser.add_argument('--classname', type=str, default='carpet', help="the subclass of the datasets")
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
@@ -238,7 +244,7 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="2")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=6)
+    parser.add_argument("--method", type=int, default=12)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
@@ -249,7 +255,7 @@ if __name__ == '__main__':
         args.pretrained = True
     else:
         args.pretrained = False
-
+    args.experiment_dir = f"experiment{args.results_save_path}"
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu

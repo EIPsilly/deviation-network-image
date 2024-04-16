@@ -57,7 +57,11 @@ class Trainer(object):
 
         self.scheduler.step()
         val_loss_list, val_auroc, val_auprc = self.eval(self.val_loader)
-        test_metric = self.test()
+
+        if epoch %  self.args.test_epoch == 0:
+            test_metric = self.test()
+        else:
+            test_metric=None
         
         return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric
     
@@ -95,6 +99,9 @@ class Trainer(object):
         roc, pr = aucPerformance(total_pred, total_target)
         return loss_list, roc, pr
 
+    def load_weights(self, filename):
+        self.model.load_state_dict(torch.load(os.path.join(args.experiment_dir, filename)))
+
     def save_weights(self, filename):
         torch.save(self.model.state_dict(), os.path.join(args.experiment_dir, filename))
 
@@ -107,18 +114,19 @@ if __name__ == '__main__':
     parser.add_argument("--epochs", type=int, default=5, help="the number of epochs")
     parser.add_argument("--cnt", type=int, default=0)
     parser.add_argument("--pretrained", type=int, default=1)
+    parser.add_argument("--test_epoch", type=int, default=5)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=4, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
-    parser.add_argument('--experiment_dir', type=str, default='./experiment', help="experiment dir root")
+    parser.add_argument('--experiment_dir', type=str, default='/DEBUG', help="experiment dir root")
     parser.add_argument('--classname', type=str, default='carpet', help="the subclass of the datasets")
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     
-    parser.add_argument("--normal_class", nargs="+", type=int, default=[0,1,2,3])
-    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[4,5,6])
+    parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
+    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='wide_resnet50_2', help="the backbone network")
@@ -126,7 +134,7 @@ if __name__ == '__main__':
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-    parser.add_argument("--domain_cnt", type=int, default=1)
+    parser.add_argument("--domain_cnt", type=int, default=3)
 
     # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "15", "--lr", "0.00001"])
     args = parser.parse_args()
@@ -134,6 +142,8 @@ if __name__ == '__main__':
         args.pretrained = True
     else:
         args.pretrained = False
+
+    args.experiment_dir = f"experiment{args.results_save_path}"
 
     file_name = f'backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -144,6 +154,9 @@ if __name__ == '__main__':
 
     if not os.path.exists(args.experiment_dir):
         os.makedirs(args.experiment_dir)
+
+    if not os.path.exists(f"results{args.results_save_path}"):
+        os.makedirs(f"results{args.results_save_path}")
 
     argsDict = args.__dict__
     with open(args.experiment_dir + '/setting.txt', 'w') as f:
@@ -162,11 +175,11 @@ if __name__ == '__main__':
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
         train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric = trainer.train(epoch)
-        if val_max_metric["AUROC"] < val_auroc:
+        if val_max_metric["AUPRC"] < val_auprc:
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
-            # trainer.save_weights(f'{file_name}.pkl')
+            trainer.save_weights(f'{file_name}.pt')
         train_results_loss.append(train_loss_list)
         
         val_results_loss.append(val_loss_list)
@@ -176,7 +189,8 @@ if __name__ == '__main__':
         test_results_list.append(test_metric)
         
 
-    # test_metric = trainer.test()
+    trainer.load_weights(f'{file_name}.pt')
+    val_max_metric["metric"] = trainer.test()
     
     print(f'results{args.results_save_path}/{file_name}.npz')
     np.savez(f'results{args.results_save_path}/{file_name}.npz',

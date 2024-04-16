@@ -6,3 +6,6 @@ results
 *.log
 .vscode
 *.out
+old_results
+old_experiment
+*.pdf
