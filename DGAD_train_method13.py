@@ -1,4 +1,5 @@
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import time
 from line_profiler import LineProfiler
@@ -11,7 +12,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method12 import DGAD_net
+from modeling.DGAD_net_method13 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -54,7 +55,7 @@ class Trainer(object):
                 image, target = image.cuda(), target.cuda()
 
             with torch.no_grad():
-                class_feature, _ = self.model.CL(image)
+                scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
             
             feature_list.append(class_feature)
         
@@ -79,13 +80,11 @@ class Trainer(object):
             if self.args.cuda:
                 image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
 
-            output, texture_score = self.model(image)
-            devnet_loss = self.criterion(output, target.unsqueeze(1).float())
+            scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
+            _, _, aug_class_feature, aug_texture_feature, _ = self.model(image)
+            devnet_loss = self.criterion(scores, target.unsqueeze(1).float())
             
-            reg_loss = self.uniform_criterion(texture_score)
-            
-            class_feature, texture_feature = self.model.CL(image)
-            aug_class_feature, aug_texture_feature = self.model.CL(augimg)
+            reg_loss = self.uniform_criterion(texture_scores)
 
             class_feature_list.append(class_feature.cpu().detach().numpy())
             texture_feature_list.append(texture_feature.cpu().detach().numpy())
@@ -103,7 +102,11 @@ class Trainer(object):
             domain_similarity_matrix = self.model.domain_prototype(F.normalize(aug_texture_feature)) / self.args.tau2
             PL_loss += nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
 
-            loss = devnet_loss + reg_loss + NCE_loss + PL_loss
+            domain_similarity_matrix = self.model.domain_prototype(F.normalize(origin_reg_feature)) / self.args.tau2
+            domain_similarity_matrix = domain_similarity_matrix.softmax(dim=1)
+            class_reg_loss = -torch.mean(torch.sum(-domain_similarity_matrix * torch.log(domain_similarity_matrix), dim=1))
+            
+            loss = devnet_loss + reg_loss + NCE_loss + PL_loss + class_reg_loss
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -113,7 +116,7 @@ class Trainer(object):
             train_loss += loss.item()
             # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-            sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(),])
+            sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(), class_reg_loss.item(), ])
             
         self.scheduler.step()
         self.domain_key = "val"
@@ -173,8 +176,8 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output, invariant_score = self.model(image)
-                class_feature, texture_feature = self.model.CL(image)
+                output, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
+                
                 class_feature_list.append(class_feature.cpu().detach().numpy())
                 texture_feature_list.append(texture_feature.cpu().detach().numpy())
                 target_list.append(target.cpu().numpy())
@@ -221,7 +224,7 @@ if __name__ == '__main__':
     parser.add_argument("--NCE_lambda", type=float, default=1.0)
     parser.add_argument("--PL_lambda", type=float, default=1.0)
     parser.add_argument("--pretrained", type=int, default=1)
-    parser.add_argument("--test_epoch", type=int, default=1)
+    parser.add_argument("--test_epoch", type=int, default=5)
     parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
@@ -244,7 +247,7 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="2")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=12)
+    parser.add_argument("--method", type=int, default=13)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
