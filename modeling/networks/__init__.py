@@ -53,5 +53,9 @@ def build_feature_extractor(args):
         print("Feature extractor: VAE_DEVNET")
         from .CVAE import CVAE
         return CVAE(args)
+    elif backbone == "VAE":
+        print("Feature extractor: VAE")
+        from .VAE import VAE
+        return VAE(args)
     else:
         raise NotImplementedError

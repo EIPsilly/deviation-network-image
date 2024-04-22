@@ -5,10 +5,10 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision
 from torch.utils.data import DataLoader
-from .res_encoder import ResNet as resnet_encoder
-from .res_decoder import ResNet as resnet_decoder
-from .res_encoder import Bottleneck as Bottleneck_encoder
-from .res_decoder import Bottleneck as Bottleneck_decoder
+from .res_encoder_for_CVAE import ResNet as resnet_encoder
+from .res_decoder_for_CVAE import ResNet as resnet_decoder
+from .res_encoder_for_CVAE import Bottleneck as Bottleneck_encoder
+from .res_decoder_for_CVAE import Bottleneck as Bottleneck_decoder
 
 class PriorNetwork(nn.Module):
     def __init__(self, dff, d_latent):

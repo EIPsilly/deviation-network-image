@@ -29,6 +29,53 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
+class BasicBlock(nn.Module):
+    expansion: int = 1
+
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            groups: int = 1,
+            base_width: int = 64,
+            dilation: int = 1,
+            norm_layer: Optional[Callable[..., nn.Module]] = None
+    ) -> None:
+        super(BasicBlock, self).__init__()
+        if norm_layer is None:
+            norm_layer = nn.BatchNorm2d
+        if groups != 1 or base_width != 64:
+            raise ValueError('BasicBlock only supports groups=1 and base_width=64')
+        if dilation > 1:
+            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
+        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = conv3x3(inplanes, planes, stride)
+        self.bn1 = norm_layer(planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = conv3x3(planes, planes)
+        self.bn2 = norm_layer(planes)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x: Tensor) -> Tensor:
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
+        return out
 
 class Bottleneck(nn.Module):
     # Bottleneck in torchvision places the stride for downsampling at 3x3 convolution(self.conv2)
@@ -102,6 +149,7 @@ class ResNet(nn.Module):
         return_indices = False,
     ) -> None:
         super().__init__()
+        self.rep_dim = num_classes
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
@@ -200,17 +248,19 @@ class ResNet(nn.Module):
         else:
             x, _ = self.maxpool(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        feature_a = self.layer1(x)  #64*64*64->256*64*64
+        feature_b = self.layer2(feature_a)  #256*64*64->512*32*32
+        feature_c = self.layer3(feature_b)  #512*32*32->1024*16*16
+        feature_d = self.layer4(feature_c)  #1024*16*16->2048*8*8
 
-        x = self.avgpool(x)
+        x = self.avgpool(feature_d)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
 
         if self.return_indices:
-            return x, indices
+            return [feature_a, feature_b, feature_c], x, indices
         else:
-            return x, []
+            return [feature_a, feature_b, feature_c], x, []
 
 
     def forward(self, x: Tensor) -> Tensor:
@@ -224,7 +274,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     resnet50.to(device)
 
-    summary(resnet50, (3, 256, 256))
+    summary(resnet50, (3, 224, 224))
     # test_input = torch.rand(2, 3, 224, 224).to(device)
     # out, indices = resnet50(test_input)
     # print(out.shape, len(indices))

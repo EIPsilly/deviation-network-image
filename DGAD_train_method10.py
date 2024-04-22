@@ -33,7 +33,7 @@ class Trainer(object):
         
         self.model = DGAD_net(args)
         
-        self.criterion = build_criterion(args.criterion)
+        self.criterion = build_criterion(args.criterion, args)
 
         if args.cuda:
             self.model = self.model.cuda()

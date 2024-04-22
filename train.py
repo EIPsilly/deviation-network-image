@@ -22,7 +22,7 @@ class Trainer(object):
 
         self.model = SemiADNet(args)
 
-        self.criterion = build_criterion(args.criterion)
+        self.criterion = build_criterion(args.criterion, args)
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.0002, weight_decay=1e-5)
         self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)

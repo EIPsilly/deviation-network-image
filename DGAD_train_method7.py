@@ -31,7 +31,7 @@ class Trainer(object):
         
         self.model = DGAD_net(args)
         
-        self.criterion = build_criterion(args.criterion)
+        self.criterion = build_criterion(args.criterion, args)
 
         self.pre_optimizer = torch.optim.Adam(self.model.parameters(), lr=args.pre_lr, weight_decay=1e-5)
         # self.pre_scheduler = torch.optim.lr_scheduler.StepLR(self.pre_optimizer, step_size=10, gamma=0.1)
