@@ -1,5 +1,5 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 import time
 from line_profiler import LineProfiler
@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method13 import DGAD_net
+from modeling.DGAD_net_method14 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -85,9 +85,12 @@ class Trainer(object):
 
             scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
             _, _, aug_class_feature, aug_texture_feature, _ = self.model(image)
-            devnet_loss = self.criterion(scores, target.unsqueeze(1).float())
+            # devnet_loss = self.criterion(scores, target.unsqueeze(1).float())
             
-            reg_loss = self.uniform_criterion(texture_scores)
+            # reg_loss = self.uniform_criterion(texture_scores)
+
+            devnet_loss = nn.CrossEntropyLoss()(scores, target)
+            reg_loss = -torch.mean(torch.sum(-texture_scores * torch.log(texture_scores), dim=1))
 
             scores_list.append(scores.cpu().detach().numpy())
             texture_scores_list.append(texture_scores.cpu().detach().numpy())
@@ -95,23 +98,23 @@ class Trainer(object):
             texture_feature_list.append(texture_feature.cpu().detach().numpy())
             target_list.append(target.cpu().detach().numpy())
             domain_label_list.append(domain_label.cpu().detach().numpy())
-            
+
             class_feature = F.normalize(class_feature - self.model.center) 
             aug_class_feature = F.normalize(aug_class_feature - self.model.center) 
             similarity_matrix = torch.matmul(class_feature, aug_class_feature.T) / self.args.tau1
-            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
+            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda()) * self.args.NCE_lambda
             
             domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
-            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
+            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
 
             domain_similarity_matrix = self.model.domain_prototype(F.normalize(aug_texture_feature)) / self.args.tau2
-            PL_loss += nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
+            PL_loss += nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label) * self.args.PL_lambda
 
             domain_similarity_matrix = self.model.domain_prototype(F.normalize(origin_reg_feature)) / self.args.tau2
             domain_similarity_matrix = domain_similarity_matrix.softmax(dim=1)
             class_reg_loss = -torch.mean(torch.sum(-domain_similarity_matrix * torch.log(domain_similarity_matrix), dim=1))
             
-            loss = devnet_loss + self.args.reg_lambda * reg_loss + self.args.NCE_lambda * NCE_loss + self.args.PL_lambda * PL_loss + class_reg_loss
+            loss = devnet_loss + reg_loss + NCE_loss + PL_loss + class_reg_loss
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -182,21 +185,19 @@ class Trainer(object):
             with torch.no_grad():
                 output, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
                 
-                domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
-                PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
-
                 class_feature_list.append(class_feature.cpu().detach().numpy())
                 texture_feature_list.append(texture_feature.cpu().detach().numpy())
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
 
-            loss = self.criterion(output, target.unsqueeze(1).float())
+            loss = nn.CrossEntropyLoss()(output, target)
+            # loss = self.criterion(output, target.unsqueeze(1).float())
             # loss2 = torch.mean(torch.abs(output - invariant_score))
             # loss += loss2
             test_loss += loss.item()
             loss_list.append(loss.item())
             # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
-            total_pred = np.append(total_pred, output.data.cpu().numpy())
+            total_pred = np.append(total_pred, output[:,1].data.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
         roc, pr = aucPerformance(total_pred, total_target)
         if self.args.save_embedding == 1:
@@ -254,7 +255,7 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="2")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=13)
+    parser.add_argument("--method", type=int, default=14)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()

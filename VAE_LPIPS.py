@@ -1,5 +1,4 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import time
 from line_profiler import LineProfiler
@@ -12,10 +11,14 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method13 import DGAD_net
+from modeling.VAE import SemiADNet
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
+
+with open("../domain-generalization-for-anomaly-detection/config.yml", 'r', encoding="utf-8") as f:
+    import yaml
+    config = yaml.load(f.read(), Loader=yaml.FullLoader)
 
 def loss_fucntion(a, b):
     cos_loss = torch.nn.CosineSimilarity()
@@ -32,35 +35,16 @@ class Trainer(object):
         kwargs = {'num_workers': args.workers}
         self.train_loader, self.val_loader, self.test_loader, self.unlabeled_loader = build_dataloader(args, **kwargs)
         
-        self.model = DGAD_net(args)
+        self.model = SemiADNet(args)
         
         self.criterion = build_criterion(args.criterion, args)
-        self.uniform_criterion = build_criterion("uniform", args)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
-        # self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.epochs, eta_min = args.lr * 1e-6)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
 
         if args.cuda:
             self.model = self.model.cuda()
             self.criterion = self.criterion.cuda()
-            self.uniform_criterion = self.uniform_criterion.cuda()
 
-    def init_center(self):
-        self.model.eval()
-        # tbar = tqdm(self.train_loader)
-        feature_list = []
-        for i, sample in enumerate(self.unlabeled_loader):
-            idx, image, _, target, domain_label, semi_domain_label = sample
-
-            if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
-
-            with torch.no_grad():
-                scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
-            
-            feature_list.append(class_feature)
-        
-        self.model.center = F.normalize(torch.mean(torch.concat(feature_list), dim=0), dim=0)
     
     def train(self, epoch):
         self.epoch = epoch
@@ -75,43 +59,15 @@ class Trainer(object):
         texture_feature_list = []
         target_list = []
         domain_label_list = []
-        scores_list = []
-        texture_scores_list = []
         for i, sample in enumerate(self.train_loader):
             idx, image, augimg, target, domain_label, semi_domain_label = sample
 
             if self.args.cuda:
-                image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
+                image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
 
-            scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
-            _, _, aug_class_feature, aug_texture_feature, _ = self.model(image)
-            devnet_loss = self.criterion(scores, target.unsqueeze(1).float())
+            reconstructions, rec_loss, kl_loss = self.model(image, domain_label)
             
-            reg_loss = self.uniform_criterion(texture_scores)
-
-            scores_list.append(scores.cpu().detach().numpy())
-            texture_scores_list.append(texture_scores.cpu().detach().numpy())
-            class_feature_list.append(class_feature.cpu().detach().numpy())
-            texture_feature_list.append(texture_feature.cpu().detach().numpy())
-            target_list.append(target.cpu().detach().numpy())
-            domain_label_list.append(domain_label.cpu().detach().numpy())
-            
-            class_feature = F.normalize(class_feature - self.model.center) 
-            aug_class_feature = F.normalize(aug_class_feature - self.model.center) 
-            similarity_matrix = torch.matmul(class_feature, aug_class_feature.T) / self.args.tau1
-            NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
-            
-            domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
-            PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
-
-            domain_similarity_matrix = self.model.domain_prototype(F.normalize(aug_texture_feature)) / self.args.tau2
-            PL_loss += nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
-
-            domain_similarity_matrix = self.model.domain_prototype(F.normalize(origin_reg_feature)) / self.args.tau2
-            domain_similarity_matrix = domain_similarity_matrix.softmax(dim=1)
-            class_reg_loss = -torch.mean(torch.sum(-domain_similarity_matrix * torch.log(domain_similarity_matrix), dim=1))
-            
-            loss = devnet_loss + self.args.reg_lambda * reg_loss + self.args.NCE_lambda * NCE_loss + self.args.PL_lambda * PL_loss + class_reg_loss
+            loss = rec_loss + kl_loss
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -121,12 +77,33 @@ class Trainer(object):
             train_loss += loss.item()
             # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-            sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(), class_reg_loss.item(), ])
-            
+            sub_train_loss_list.append([rec_loss.item(), kl_loss.item()])
+        
+        print(f"train_loss:{np.mean(train_loss_list)}")
+        x = image[-1].detach()
+        y = reconstructions[-1].detach()
+        import torchvision.transforms as transforms
+        un_norm = transforms.Compose([transforms.Normalize(mean = [ 0., 0., 0. ],
+                                                           std = [ 1/0.229, 1/0.224, 1/0.225 ]),
+                                      transforms.Normalize(mean = [ -0.485, -0.456, -0.406 ],
+                                                           std = [ 1., 1., 1. ]),
+                               ])
+
+        x = np.uint8(un_norm(x).cpu().numpy() * 255).transpose((2,1,0))
+        y = np.uint8(un_norm(y).cpu().numpy() * 255).transpose((2,1,0))
+        from PIL import Image
+        input_img = Image.fromarray(x)
+        rec_img = Image.fromarray(y)
+        
+        origin_img = Image.open(config["PACS_root"] + self.train_loader.dataset.image_paths[[idx[-1]]][0]).convert('RGB')
+        input_img.save(f"images/{file_name}/{epoch}input_img.jpg")
+        rec_img.save(f"images/{file_name}/{epoch}rec_img.jpg")
+        origin_img.save(f"images/{file_name}/{epoch}origin.jpg")
+        
         self.scheduler.step()
         self.domain_key = "val"
         val_loss_list, val_auroc, val_auprc, total_pred, total_target = self.eval(self.val_loader)
-        if (epoch == 0)  or ((epoch - 1) %  self.args.test_epoch == 0):
+        if epoch %  self.args.test_epoch == 0:
             test_start = time.time()
             test_metric = self.test()
             end = time.time()
@@ -146,6 +123,7 @@ class Trainer(object):
                      domain_label_list=np.concatenate(domain_label_list),
                      total_pred = total_pred,
                      total_target = total_target)
+        
         
         return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list
     
@@ -180,25 +158,18 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                output, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
-                
-                domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
-                PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
-
-                class_feature_list.append(class_feature.cpu().detach().numpy())
-                texture_feature_list.append(texture_feature.cpu().detach().numpy())
+                reg, rec_loss, kl_loss = self.model(image, domain_label)
+                loss = rec_loss + kl_loss
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
-
-            loss = self.criterion(output, target.unsqueeze(1).float())
-            # loss2 = torch.mean(torch.abs(output - invariant_score))
-            # loss += loss2
-            test_loss += loss.item()
+            
+            # loss = torch.mean(loss)
+            # test_loss += loss.item()
             loss_list.append(loss.item())
             # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
-            total_pred = np.append(total_pred, output.data.cpu().numpy())
-            total_target = np.append(total_target, target.cpu().numpy())
-        roc, pr = aucPerformance(total_pred, total_target)
+            total_pred = None
+            total_target = None
+        roc, pr = None, None
         if self.args.save_embedding == 1:
             np.savez(f"./results/intermediate_results/epoch={self.epoch},{self.domain_key}.npz",
                      class_feature_list=np.concatenate(class_feature_list),
@@ -210,7 +181,7 @@ class Trainer(object):
                      AUPRC=np.array(pr),
                      )
         return loss_list, roc, pr, total_pred, total_target
-    
+
     def load_weights(self, filename):
         self.model.load_state_dict(torch.load(os.path.join(args.experiment_dir, filename)))
 
@@ -230,44 +201,39 @@ if __name__ == '__main__':
     parser.add_argument("--reg_lambda", type=float, default=1.0)
     parser.add_argument("--NCE_lambda", type=float, default=1.0)
     parser.add_argument("--PL_lambda", type=float, default=1.0)
-    parser.add_argument("--pretrained", type=int, default=1)
     parser.add_argument("--test_epoch", type=int, default=5)
-    parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
-    parser.add_argument('--experiment_dir', type=str, default='/experiment', help="experiment dir root")
+    parser.add_argument('--experiment_dir', type=str, default='./experiment', help="experiment dir root")
     parser.add_argument('--classname', type=str, default='carpet', help="the subclass of the datasets")
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
+    parser.add_argument("--BalancedBatchSampler", type=int, default=1)
+    
     
     parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-    parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
+    parser.add_argument('--backbone', type=str, default='VAE', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="2")
+    parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=13)
+    parser.add_argument("--method", type=int, default=0)
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
-    # args = parser.parse_args(["--epochs", "40", "--lr", "0.0001", "--normal", "1", "--anomaly_class", "0", "2", "3", "4", "5", "6"])
     # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
     
-    if args.pretrained == 1:
-        args.pretrained = True
-    else:
-        args.pretrained = False
     args.experiment_dir = f"experiment{args.results_save_path}"
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -280,6 +246,9 @@ if __name__ == '__main__':
     if not os.path.exists(f"results{args.results_save_path}"):
         os.makedirs(f"results{args.results_save_path}")
     
+    if not os.path.exists(f"images/{file_name}"):
+        os.makedirs(f"images/{file_name}")
+    
     argsDict = args.__dict__
     with open(args.experiment_dir + '/setting.txt', 'w') as f:
         f.writelines('------------------ start ------------------' + '\n')
@@ -288,25 +257,24 @@ if __name__ == '__main__':
         f.writelines('------------------- end -------------------')
 
     val_max_metric = {"AUROC": -1,
-                      "AUPRC": -1}
+                      "AUPRC": -1,
+                      "loss": 2147483647}
     train_results_loss = []
     sub_train_results_loss = []
     val_results_loss = []
     val_AUROC_list = []
     val_AUPRC_list = []
     
-    trainer.init_center()
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
-        # lp = LineProfiler()
-        # lp_wrapper = lp(trainer.train)
-        # train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = lp_wrapper(epoch)
-        # lp.print_stats()
         train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list = trainer.train(epoch)
-        if val_max_metric["AUPRC"] <= val_auprc:
+        loss = np.mean(val_loss_list)
+        print(f"val_loss:{loss}")
+        if val_max_metric["loss"] >= loss:
             val_max_metric["AUROC"] = val_auroc
             val_max_metric["AUPRC"] = val_auprc
             val_max_metric["epoch"] = epoch
+            val_max_metric["loss"] = loss
             trainer.save_weights(f'{file_name}.pt')
         train_results_loss.append(train_loss_list)
         sub_train_results_loss.append(sub_train_loss_list)
@@ -316,7 +284,8 @@ if __name__ == '__main__':
         val_AUPRC_list.append(val_auprc)
 
         test_results_list.append(test_metric)
-    
+        
+
     trainer.load_weights(f'{file_name}.pt')
     val_max_metric["metric"] = trainer.test()
     # test_metric = trainer.test()
