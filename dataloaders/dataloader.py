@@ -1,4 +1,3 @@
-from datasets import mvtecad
 from torch.utils.data import DataLoader
 from dataloaders.utlis import worker_init_fn_seed, BalancedBatchSampler
 from datasets.PACS import PACS_Data

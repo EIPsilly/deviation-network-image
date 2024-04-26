@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.VAE import SemiADNet
+from modeling.VAE_LPIPS import SemiADNet
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -39,7 +39,7 @@ class Trainer(object):
         
         self.criterion = build_criterion(args.criterion, args)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma=0.1)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
 
         if args.cuda:
             self.model = self.model.cuda()
@@ -64,10 +64,7 @@ class Trainer(object):
 
             if self.args.cuda:
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
-
-            reconstructions, rec_loss, kl_loss = self.model(image, domain_label)
-            
-            loss = rec_loss + kl_loss
+            reconstructions, loss, rec_loss, kl_loss  = self.model(image, domain_label)
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -95,10 +92,10 @@ class Trainer(object):
         input_img = Image.fromarray(x)
         rec_img = Image.fromarray(y)
         
-        origin_img = Image.open(config["PACS_root"] + self.train_loader.dataset.image_paths[[idx[-1]]][0]).convert('RGB')
-        input_img.save(f"images/{file_name}/{epoch}input_img.jpg")
-        rec_img.save(f"images/{file_name}/{epoch}rec_img.jpg")
-        origin_img.save(f"images/{file_name}/{epoch}origin.jpg")
+        # origin_img = Image.open(config["PACS_root"] + self.train_loader.dataset.image_paths[[idx[-1]]][0]).convert('RGB')
+        input_img.save(f"images_log/{file_name}/{epoch}input_img.jpg")
+        rec_img.save(f"images_log/{file_name}/{epoch}rec_img.jpg")
+        # origin_img.save(f"images_log/{file_name}/{epoch}origin.jpg")
         
         self.scheduler.step()
         self.domain_key = "val"
@@ -158,7 +155,7 @@ class Trainer(object):
             if self.args.cuda:
                 image, target = image.cuda(), target.cuda()
             with torch.no_grad():
-                reg, rec_loss, kl_loss = self.model(image, domain_label)
+                reconstructions, loss, rec_loss, kl_loss  = self.model(image, domain_label)
                 loss = rec_loss + kl_loss
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
@@ -222,10 +219,10 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='VAE', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="1")
+    parser.add_argument("--gpu",type=str, default="2")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=0)
+    parser.add_argument("--method", type=str, default="VAE_LPIPS")
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
@@ -234,6 +231,7 @@ if __name__ == '__main__':
     args.experiment_dir = f"experiment{args.results_save_path}"
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler},cnt={args.cnt}'
+    print(args.gpu)
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -246,8 +244,8 @@ if __name__ == '__main__':
     if not os.path.exists(f"results{args.results_save_path}"):
         os.makedirs(f"results{args.results_save_path}")
     
-    if not os.path.exists(f"images/{file_name}"):
-        os.makedirs(f"images/{file_name}")
+    if not os.path.exists(f"images_log/{file_name}"):
+        os.makedirs(f"images_log/{file_name}")
     
     argsDict = args.__dict__
     with open(args.experiment_dir + '/setting.txt', 'w') as f:
@@ -285,7 +283,7 @@ if __name__ == '__main__':
 
         test_results_list.append(test_metric)
         
-
+    trainer.save_weights(f'{file_name},epoch={args.epochs}.pt')
     trainer.load_weights(f'{file_name}.pt')
     val_max_metric["metric"] = trainer.test()
     # test_metric = trainer.test()
