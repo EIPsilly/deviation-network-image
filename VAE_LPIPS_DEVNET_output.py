@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.VAE_LPIPS import SemiADNet
+from modeling.VAE_LPIPS_DEVNET import SemiADNet
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -59,7 +59,7 @@ class Trainer(object):
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
             
             with torch.no_grad():
-                reconstructions, loss, rec_loss, kl_loss  = self.model(image, domain_label)
+                reconstructions, rec_loss, kl_loss, class_score, domain_score, class_classification, domain_classification = self.model(image, domain_label, target)
             
             x = image.detach()
             y = reconstructions.detach()
@@ -81,11 +81,11 @@ class Trainer(object):
         if not os.path.exists(f'images/{file_name}/{key}'):
             os.makedirs(f'images/{file_name}/{key}')
 
-        for idx, x in enumerate(x_list):
+        for idx, x in enumerate(x_list[:5]):
             input_img = Image.fromarray(x)
             input_img.save(f"images/{file_name}/{key}/{idx}input_img.jpg")
         
-        for idx, y in enumerate(y_list):
+        for idx, y in enumerate(y_list[:5]):
             input_img = Image.fromarray(y)
             input_img.save(f"images/{file_name}/{key}/{idx}rec_img.jpg")
         
@@ -116,10 +116,12 @@ if __name__ == '__main__':
     parser.add_argument("--cnt", type=int, default=0)
     parser.add_argument("--tau1",type=float,default=0.07)
     parser.add_argument("--tau2",type=float,default=0.07)
+    parser.add_argument("--rec_lambda", type=float, default=1e-6)
     parser.add_argument("--reg_lambda", type=float, default=1.0)
     parser.add_argument("--NCE_lambda", type=float, default=1.0)
     parser.add_argument("--PL_lambda", type=float, default=1.0)
     parser.add_argument("--test_epoch", type=int, default=5)
+    parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
@@ -137,21 +139,21 @@ if __name__ == '__main__':
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-    parser.add_argument('--backbone', type=str, default='VAE', help="the backbone network")
+    parser.add_argument('--backbone', type=str, default='VAE_LPIPS_DEVNET', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=str, default="VAE_LPIPS")
+    parser.add_argument("--method", type=str, default="VAE_LPIPS_DEVNET")
 
     args = parser.parse_args(["--epochs", "250", "--lr", "0.0001", "--cnt", "2", '--results_save_path', '/DGAD/VAE_LPIPS'])
     # args = parser.parse_args()
     # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
     
     args.experiment_dir = f"experiment{args.results_save_path}"
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler},cnt={args.cnt}'
+    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},rec_lambda={args.rec_lambda},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},rec_lambda={args.rec_lambda},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -183,8 +185,6 @@ if __name__ == '__main__':
     val_AUROC_list = []
     val_AUPRC_list = []
     
-    test_results_list = []
-
     trainer.load_weights(f'{file_name}.pt')
-    # val_max_metric["metric"] = trainer.test()
     trainer.test()
+    

@@ -178,12 +178,13 @@ class Trainer(object):
         for i, sample in enumerate(dataset):
             idx, image, _, target, domain_label, semi_domain_label = sample
             if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
+                image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
             with torch.no_grad():
                 output, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
                 
                 domain_similarity_matrix = self.model.domain_prototype(F.normalize(texture_feature)) / self.args.tau2
-                PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
+                # domain_similarity_matrix
+                # PL_loss = nn.CrossEntropyLoss()(domain_similarity_matrix, domain_label)
 
                 class_feature_list.append(class_feature.cpu().detach().numpy())
                 texture_feature_list.append(texture_feature.cpu().detach().numpy())
@@ -220,6 +221,7 @@ class Trainer(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--lr",type=float,default=0.0002)
     parser.add_argument("--batch_size", type=int, default=30, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
@@ -235,7 +237,7 @@ if __name__ == '__main__':
     parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
-    parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
+    parser.add_argument('--workers', type=int, default=16, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
@@ -251,23 +253,25 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="2")
+    parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=13)
 
-    # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
-    # args = parser.parse_args(["--epochs", "40", "--lr", "0.0001", "--normal", "1", "--anomaly_class", "0", "2", "3", "4", "5", "6"])
-    # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
+    # args = parser.parse_args(["--data_name", "MVTEC_with_domain_label", "--domain_cnt", "4"])
     
     if args.pretrained == 1:
         args.pretrained = True
     else:
         args.pretrained = False
     args.experiment_dir = f"experiment{args.results_save_path}"
-    model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
-    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+    if args.data_name.__contains__("PACS"):
+        model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+    if args.data_name.__contains__("MVTEC"):
+        model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -279,7 +283,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(f"results{args.results_save_path}"):
         os.makedirs(f"results{args.results_save_path}")
-    
+
     argsDict = args.__dict__
     with open(args.experiment_dir + '/setting.txt', 'w') as f:
         f.writelines('------------------ start ------------------' + '\n')

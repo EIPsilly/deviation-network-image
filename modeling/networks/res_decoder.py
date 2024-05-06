@@ -184,7 +184,7 @@ class ResNet(nn.Module):
 
     def _forward_impl(self, x: Tensor, indices) -> Tensor:
         # See note [TorchScript super()]
-        x = self.unsample(x)
+        # x = self.unsample(x)
         x = self.layer4(x)
         x = self.layer3(x)
         x = self.layer2(x)

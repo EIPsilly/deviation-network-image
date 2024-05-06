@@ -21,7 +21,7 @@ def build_dataloader(args, **kwargs):
 
     train_set = data.train_data
     if ("BalancedBatchSampler" in args) and (args.BalancedBatchSampler == 0):
-        train_loader = DataLoader(train_set, worker_init_fn=worker_init_fn_seed, batch_size=args.batch_size, **kwargs)
+        train_loader = DataLoader(train_set, worker_init_fn=worker_init_fn_seed, shuffle=True, batch_size=args.batch_size, **kwargs)
     else:
         train_loader = DataLoader(train_set, worker_init_fn=worker_init_fn_seed, batch_sampler=BalancedBatchSampler(args, train_set), **kwargs)
     val_data = data.val_data
