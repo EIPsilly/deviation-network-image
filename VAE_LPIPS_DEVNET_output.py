@@ -78,16 +78,16 @@ class Trainer(object):
         x_list = np.concatenate(x_list)
         y_list = np.concatenate(y_list)
 
-        if not os.path.exists(f'images/{file_name}/{key}'):
-            os.makedirs(f'images/{file_name}/{key}')
+        if not os.path.exists(f'images{args.results_save_path}/{file_name}/{key}'):
+            os.makedirs(f'images{args.results_save_path}/{file_name}/{key}')
 
         for idx, x in enumerate(x_list[:5]):
             input_img = Image.fromarray(x)
-            input_img.save(f"images/{file_name}/{key}/{idx}input_img.jpg")
+            input_img.save(f"images{args.results_save_path}/{file_name}/{key}/{idx}input_img.jpg")
         
         for idx, y in enumerate(y_list[:5]):
             input_img = Image.fromarray(y)
-            input_img.save(f"images/{file_name}/{key}/{idx}rec_img.jpg")
+            input_img.save(f"images{args.results_save_path}/{file_name}/{key}/{idx}rec_img.jpg")
         
         return
     
@@ -147,9 +147,8 @@ if __name__ == '__main__':
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=str, default="VAE_LPIPS_DEVNET")
 
-    args = parser.parse_args(["--epochs", "250", "--lr", "0.0001", "--cnt", "2", '--results_save_path', '/DGAD/VAE_LPIPS'])
+    args = parser.parse_args(["--epochs", "150", "--lr", "0.00005", "--cnt", "10", "--rec_lambda", "0.000001", '--results_save_path', '/DGAD/V_L_D'])
     # args = parser.parse_args()
-    # args = parser.parse_args(["--epochs", "30", "--lr", "5e-5", "--tau1", "0.07", "--tau2", "0.07", "--reg_lambda", "2.0", "--NCE_lambda", "1.0", "--PL_lambda", "1.0", "--gpu", "1", "--cnt", "0", "--save_embedding", "1", "--results_save_path", "/intermediate_results"])
     
     args.experiment_dir = f"experiment{args.results_save_path}"
     model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},rec_lambda={args.rec_lambda},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},BalancedBatchSampler={args.BalancedBatchSampler}'
@@ -166,8 +165,8 @@ if __name__ == '__main__':
     if not os.path.exists(f"results{args.results_save_path}"):
         os.makedirs(f"results{args.results_save_path}")
     
-    if not os.path.exists(f"images/{file_name}"):
-        os.makedirs(f"images/{file_name}")
+    if not os.path.exists(f"images{args.results_save_path}/{file_name}"):
+        os.makedirs(f"images{args.results_save_path}/{file_name}")
     
     argsDict = args.__dict__
     with open(args.experiment_dir + '/setting.txt', 'w') as f:

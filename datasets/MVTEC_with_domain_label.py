@@ -122,7 +122,7 @@ class MVTEC_Dataset(Dataset):
         
         self.img_list = []
         resize_transform = transforms.Compose([
-            transforms.Resize((253, 253)),
+            transforms.Resize((256, 256)),
             ])
         self.domain_labels = np.empty_like(self.labels)
 

@@ -180,7 +180,7 @@ class PACS_with_domain_label():
 
         mean = (0.485, 0.456, 0.406)
         std = (0.229, 0.224, 0.225)
-        image_size = 253
+        image_size = 256
 
         train_transform = transforms.Compose([
                 transforms.ToTensor(),
