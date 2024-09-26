@@ -12,3 +12,6 @@ old_experiment
 images
 images_log
 *.pth
+*.ckpt
+image_log
+lightning_logs

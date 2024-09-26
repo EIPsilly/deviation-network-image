@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
+from datasets.augmix import augpacs
 
 mean_train = [0.485, 0.456, 0.406]
 std_train = [0.229, 0.224, 0.225]
@@ -36,7 +37,8 @@ def calc_label_idx(domain, idx):
     return domain_to_idx[domain] * 7 + class_to_idx[idx]
 
 class PACSDataset(Dataset):
-    def __init__(self, args, type, root):
+    def __init__(self, args, type):
+        root = config["PACS_root"]
         self.args = args
 
         normal_class = "".join(list(map(str,args.normal_class)))

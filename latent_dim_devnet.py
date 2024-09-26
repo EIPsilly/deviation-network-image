@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.VAE_LPIPS_DEVNET import SemiADNet
+from modeling.latent_dim_devnet import SemiADNet
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -82,20 +82,11 @@ class Trainer(object):
 
             if self.args.cuda:
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
-            reconstructions, rec_loss, kl_loss, class_score, domain_score, class_classification, domain_classification = self.model(image, domain_label, target)
-            
-            devnet_loss = self.criterion(class_score, target.unsqueeze(1).float())
-            reg_loss = self.uniform_criterion(domain_score)
-            
-            PL_loss = nn.CrossEntropyLoss()(domain_classification / self.args.tau2, domain_label) * self.args.PL_lambda
-            class_classification = (class_classification / self.args.tau2).softmax(dim=1)
-            class_reg_loss = -torch.mean(torch.sum(-class_classification * torch.log(class_classification), dim=1))
-            
-            if epoch > 100:
-                loss = devnet_loss + reg_loss + PL_loss + class_reg_loss
-            else:
-                loss = (self.args.rec_lambda * rec_loss + kl_loss) + devnet_loss + reg_loss + PL_loss + class_reg_loss
-            
+            score = self.model(image)
+
+            devnet_loss = self.criterion(score, target.unsqueeze(1).float())
+            loss = devnet_loss
+
             self.optimizer.zero_grad()
             loss.backward()
 
@@ -104,15 +95,9 @@ class Trainer(object):
             train_loss += loss.item()
             # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
             train_loss_list.append(loss.item())
-            sub_train_loss_list.append([rec_loss.item(), kl_loss.item(), devnet_loss.item(), reg_loss.item(), PL_loss.item(), class_reg_loss.item()])
+            sub_train_loss_list.append([devnet_loss.item()])
         
         print(f"train_loss:{np.mean(train_loss_list)}\tsubloss:{np.array(sub_train_loss_list).mean(axis = 0)}")
-        x = image[-1].detach()
-        y = reconstructions[-1].detach()
-        self.log_image(x, y, file_name, epoch, "A")
-        x = image[0].detach()
-        y = reconstructions[0].detach()
-        self.log_image(x, y, file_name, epoch, "N")
         
         self.scheduler.step()
         self.domain_key = "val"
@@ -172,21 +157,11 @@ class Trainer(object):
             if self.args.cuda:
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
             with torch.no_grad():
-                reconstructions, rec_loss, kl_loss, class_score, domain_score, class_classification, domain_classification = self.model(image, domain_label, target)
-                
-                devnet_loss = self.criterion(class_score, target.unsqueeze(1).float())
-                reg_loss = self.uniform_criterion(domain_score)
-                
-                if domain == "sketch":
-                    PL_loss = 0
-                else:
-                    PL_loss = nn.CrossEntropyLoss()(domain_classification / self.args.tau2, domain_label) * self.args.PL_lambda
+                score = self.model(image)
 
-                class_classification = (class_classification / self.args.tau2).softmax(dim=1)
-                class_reg_loss = -torch.mean(torch.sum(-class_classification * torch.log(class_classification), dim=1))
+                devnet_loss = self.criterion(score, target.unsqueeze(1).float())
                 
-
-                loss = self.args.rec_lambda * rec_loss + kl_loss + devnet_loss + reg_loss + PL_loss + class_reg_loss
+                loss = devnet_loss
                 
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
@@ -195,7 +170,7 @@ class Trainer(object):
             # test_loss += loss.item()
             loss_list.append(loss.item())
             # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
-            total_pred = np.append(total_pred, class_score.cpu().numpy())
+            total_pred = np.append(total_pred, score.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
         roc, pr = aucPerformance(total_pred, total_target)
         if self.args.save_embedding == 1:
@@ -244,7 +219,6 @@ if __name__ == '__main__':
     parser.add_argument('--experiment_dir', type=str, default='./experiment', help="experiment dir root")
     parser.add_argument('--classname', type=str, default='carpet', help="the subclass of the datasets")
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
-    parser.add_argument('--input_img_size', type=int, default=253, help="the image size of input")
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
     parser.add_argument("--BalancedBatchSampler", type=int, default=1)
     
@@ -253,13 +227,13 @@ if __name__ == '__main__':
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-    parser.add_argument('--backbone', type=str, default='VAE_LPIPS_DEVNET', help="the backbone network")
+    parser.add_argument('--backbone', type=str, default='latent_dim_devnet', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="3")
+    parser.add_argument("--gpu",type=str, default="1")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=str, default="VAE_LPIPS_DEVNET")
+    parser.add_argument("--method", type=str, default="latent_dim_devnet")
 
     # args = parser.parse_args(["--epochs", "2", "--lr", "0.00001"])
     args = parser.parse_args()
@@ -324,7 +298,7 @@ if __name__ == '__main__':
 
         test_results_list.append(test_metric)
         
-    trainer.save_weights(f'{file_name},epoch={args.epochs}.pt')
+    # trainer.save_weights(f'{file_name},epoch={args.epochs}.pt')
     trainer.load_weights(f'{file_name}.pt')
     val_max_metric["metric"] = trainer.test()
     # test_metric = trainer.test()

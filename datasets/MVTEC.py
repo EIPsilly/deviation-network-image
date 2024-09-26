@@ -10,6 +10,7 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset,DataLoader
 import torchvision.transforms as transforms
 from collections import Counter
+from datasets.augmix import augmvtec
 
 with open("../domain-generalization-for-anomaly-detection/config.yml", 'r', encoding="utf-8") as f:
     import yaml

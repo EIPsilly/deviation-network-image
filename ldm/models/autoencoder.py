@@ -166,8 +166,11 @@ class AutoencoderKL(pl.LightningModule):
     @torch.no_grad()
     def log_images(self, batch, only_inputs=False, log_ema=False, **kwargs):
         log = dict()
-        x = self.get_input(batch, self.image_key)
-        x = x.to(self.device)
+        if isinstance(batch, torch.Tensor):
+            x = batch
+        else:
+            x = self.get_input(batch, self.image_key)
+            x = x.to(self.device)
         if not only_inputs:
             xrec, posterior = self(x)
             if x.shape[1] > 3:
