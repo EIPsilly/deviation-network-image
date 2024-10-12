@@ -49,7 +49,7 @@ class SemiADNet(nn.Module):
         
         resume_path = "./models/epoch=5-step=119.ckpt"
         resume_path = "./models/epoch=157-step=3159.ckpt"
-        resume_path = "./models/epoch=999-step=19999.ckpt"
+        resume_path = "./models/PACS_epoch=999-step=19999.ckpt"
 
         # First use cpu to load models. Pytorch Lightning will automatically move it to GPUs.
         self.AE = create_model('./models/autoencoder_kl_32x32x4.yaml').cpu()

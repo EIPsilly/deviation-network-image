@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.latent_dim_DGAD import SemiADNet
+from modeling.latent_dim_DGAD_VAE import SemiADNet
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -41,8 +41,7 @@ class Trainer(object):
         self.criterion = build_criterion(args.criterion, args)
         self.uniform_criterion = build_criterion("uniform", args)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=1e-5)
-        # self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=args.epochs, eta_min = args.lr * 1e-6)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
         
         if args.cuda:
             self.model = self.model.cuda()
@@ -85,7 +84,7 @@ class Trainer(object):
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
             z, recon, mu, logvar = self.model(image, domain_label, target)
 
-            rec_loss = F.mse_loss(recon, z, reduction="sum")  # use "mean" may have a bad effect on gradients
+            rec_loss = F.mse_loss(recon, z, reduction="mean")  # use "mean" may have a bad effect on gradients
             kl_loss = -0.5 * (1 + 2 * logvar - mu.pow(2) - torch.exp(2 * logvar))
             kl_loss = torch.sum(kl_loss)
             class_score = self.model.calc_anomaly(mu)

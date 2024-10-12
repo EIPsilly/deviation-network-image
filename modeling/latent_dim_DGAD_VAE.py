@@ -42,6 +42,64 @@ class MLP(nn.Module):
             x = F.leaky_relu(layer(x))
         return x
 
+class VAE(nn.Module):
+    def __init__(self, args):
+        super(VAE, self).__init__()
+        self.args = args
+        self.encoder = nn.Sequential(
+            nn.Conv2d(4, 16, 4, stride=2, padding=1),  # Output: 16x16x16
+            nn.ReLU(),
+            nn.Conv2d(16, 16, 3, stride=1, padding=1),  # Output: 16x16x16
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 4, stride=2, padding=1), # Output: 32x8x8
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 3, stride=1, padding=1),  # Output: 32x8x8
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 4, stride=2, padding=1), # Output: 32x4x4
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 3, stride=1, padding=1), # Output: 32x4x4
+            nn.ReLU()
+        )
+        self.fc_mu = nn.Linear(32 * 4 * 4, 128)
+        self.fc_logvar = nn.Linear(32 * 4 * 4, 128)
+        self.fc_decode = nn.Linear(128, 32 * 4 * 4)
+        
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(32, 32, 3, stride=1, padding=1), # Output: 32x4x4
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 32, 4, stride=2, padding=1), # Output: 32x8x8
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 32, 3, stride=1, padding=1), # Output: 32x8x8
+            nn.ReLU(), 
+            nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1), # Output: 16*16*16
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 16, 3, stride=1, padding=1), # Output: 16x16x16
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, 4, 4, stride=2, padding=1),   # Output: 4x32x32
+            nn.Sigmoid()  # For output normalization
+        )
+
+    def encode(self, x):
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        mu = self.fc_mu(x)
+        logvar = self.fc_logvar(x)
+        return mu, logvar
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        z = self.fc_decode(z).view(-1, 32, 4, 4)
+        return self.decoder(z)
+
+    def forward(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
+
 class SemiADNet(nn.Module):
     def __init__(self, args):
         super(SemiADNet, self).__init__()
@@ -55,6 +113,7 @@ class SemiADNet(nn.Module):
         self.AE = create_model('./models/autoencoder_kl_32x32x4.yaml').cpu()
         self.AE.load_state_dict(load_state_dict(resume_path, location='cpu'), strict=False)
         self.AE = self.AE.cuda()
+        self.VAE = VAE(args)
         self.domain_classifier = nn.utils.weight_norm(nn.Linear(64, self.args.domain_cnt, bias=False))
         self.domain_classifier.weight_g.data.fill_(1)
         self.domain_classifier.weight_g.requires_grad = False
@@ -69,8 +128,9 @@ class SemiADNet(nn.Module):
         return self.domain_classification_net(x)
 
     def forward(self, image, domain_label, target, weights=None):
-        posterior = self.AE.encode(image)
-        z = posterior.sample() #4*32*32
+        with torch.no_grad():
+            posterior = self.AE.encode(image)
+            z = posterior.sample().detach() #4*32*32
         recon, mu, logvar = self.VAE(z)
         
         return z, recon, mu, logvar
