@@ -83,7 +83,7 @@ class Unet(nn.Module):
         self.layer7_conv = double_conv2d_bn(64,32)
         self.layer8_conv = double_conv2d_bn(32,16)
         self.layer9_conv = double_conv2d_bn(16,8)
-        self.layer10_conv = nn.Conv2d(8, 8,kernel_size=3,stride=1,padding=1,bias=True)
+        self.layer10_conv = nn.Conv2d(8, 4,kernel_size=3,stride=1,padding=1,bias=True)
         
         self.deconv1 = deconv2d_bn(128,64)
         self.deconv2 = deconv2d_bn(64,32)
@@ -198,12 +198,12 @@ class SemiADNet(nn.Module):
         self.AE = create_model('./models/autoencoder_kl_32x32x4.yaml').cpu()
         self.AE.load_state_dict(load_state_dict(resume_path, location='cpu'), strict=False)
         self.Unet = Unet(args)
-        # self.perceptual_loss = LPIPS().eval()
-        # logvar_init = 0.0
-        # self.perceptual_weight = 1.0
+        self.perceptual_loss = LPIPS().eval()
+        logvar_init = 0.0
+        self.perceptual_weight = 1.0
         # self.kl_weight = 0.000001
         # self.kl_weight = 1.0
-        # self.logvar = nn.Parameter(torch.ones(size=()) * logvar_init)
+        self.logvar = nn.Parameter(torch.ones(size=()) * logvar_init)
         # self.domain_classifier = nn.utils.weight_norm(nn.Linear(64, self.args.domain_cnt, bias=False))
         # self.domain_classifier.weight_g.data.fill_(1)
         # self.domain_classifier.weight_g.requires_grad = False
@@ -218,7 +218,7 @@ class SemiADNet(nn.Module):
         )
         self.domain_classification_net = MLP(self.args, [128, 32, 3])
         self.prior_embeddings = nn.Embedding((args.domain_cnt + 1) * 2, 256)
-        self.prior_net = PriorNetwork(256, 256)
+        self.prior_net = PriorNetwork(256, 128)
 
 
     def calc_anomaly(self, x):
@@ -251,17 +251,17 @@ class SemiADNet(nn.Module):
         with torch.no_grad():
             reconstructions = self.AE.decode(recon)
         
-        # rec_loss = torch.abs(image.contiguous() - reconstructions.contiguous())
-        # p_loss = self.perceptual_loss(image.contiguous(), reconstructions.contiguous())
-        # rec_loss = rec_loss + self.perceptual_weight * p_loss
+        rec_loss = torch.abs(image.contiguous() - reconstructions.contiguous())
+        p_loss = self.perceptual_loss(image.contiguous(), reconstructions.contiguous())
+        rec_loss = rec_loss + self.perceptual_weight * p_loss
 
-        # nll_loss = rec_loss / torch.exp(self.logvar) + self.logvar
-        # weighted_nll_loss = nll_loss
-        # if weights is not None:
-        #     weighted_nll_loss = weights*nll_loss
-        # weighted_nll_loss = torch.sum(weighted_nll_loss) / weighted_nll_loss.shape[0]
+        nll_loss = rec_loss / torch.exp(self.logvar) + self.logvar
+        weighted_nll_loss = nll_loss
+        if weights is not None:
+            weighted_nll_loss = weights*nll_loss
+        weighted_nll_loss = torch.sum(weighted_nll_loss) / weighted_nll_loss.shape[0]
 
         # kl_loss = posterior.kl()
         # kl_loss = torch.sum(kl_loss) / kl_loss.shape[0] * self.kl_weight
         
-        return z, recon, mu, logvar, mu_p, logvar_p
+        return z, recon, mu, logvar, mu_p, logvar_p, weighted_nll_loss

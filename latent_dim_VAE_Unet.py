@@ -83,18 +83,18 @@ class Trainer(object):
 
             if self.args.cuda:
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
-            z, recon, mu, logvar, mu_p, logvar_p = self.model(image, domain_label, target)
+            z, recon, mu, logvar, mu_p, logvar_p, rec_loss = self.model(image, domain_label, target)
 
-            z1, z2 = torch.chunk(z, 2, dim=1)
+            # z1, z2 = torch.chunk(z, 2, dim=1)
 
-            rec_loss = F.mse_loss(recon, z, reduction="sum")  # use "mean" may have a bad effect on gradients
+            # rec_loss = F.mse_loss(recon, z, reduction="sum")  # use "mean" may have a bad effect on gradients
             # kl_loss = -0.5 * (1 + 2 * logvar - mu.pow(2) - torch.exp(2 * logvar))
             kl_loss = 0.5 * (logvar_p - logvar - 1
                              + torch.exp(logvar - logvar_p)
                              + (mu_p - mu) ** 2 / torch.exp(logvar_p))
             kl_loss = torch.sum(kl_loss)
 
-            class_score = self.model.calc_anomaly(z1)
+            class_score = self.model.calc_anomaly(z)
             devnet_loss = self.criterion(class_score, target.unsqueeze(1).float())
 
             # domain_classification = self.model.domain_classification(domain_z)
@@ -187,9 +187,11 @@ class Trainer(object):
             if self.args.cuda:
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
             with torch.no_grad():
-                z, recon, mu, logvar, mu_p, logvar_p = self.model(image, domain_label, target)
+                z, recon, mu, logvar, mu_p, logvar_p, rec_loss = self.model(image, domain_label, target)
 
-                rec_loss = F.mse_loss(recon, z, reduction="sum")  # use "mean" may have a bad effect on gradients
+                # z1, z2 = torch.chunk(z, 2, dim=1)
+
+                # rec_loss = F.mse_loss(recon, z, reduction="sum")  # use "mean" may have a bad effect on gradients
                 # kl_loss = -0.5 * (1 + 2 * logvar - mu.pow(2) - torch.exp(2 * logvar))
                 kl_loss = 0.5 * (logvar_p - logvar - 1
                                 + torch.exp(logvar - logvar_p)
@@ -279,7 +281,7 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='latent_dim_VAE_Unet', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
-    parser.add_argument("--gpu",type=str, default="2")
+    parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=str, default="latent_dim_VAE_Unet")
