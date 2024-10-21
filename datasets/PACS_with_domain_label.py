@@ -81,8 +81,10 @@ class PACS_with_domain_label():
         anomaly_class = "".join(list(map(str,args.anomaly_class)))
         if args.domain_cnt == 1:
             train_path = f'../domain-generalization-for-anomaly-detection/data/pacs/semi-supervised/1domain/20240412-PACS-{normal_class}-{anomaly_class}.npz'
+            # train_path = f'../domain-generalization-for-anomaly-detection/data/one_source_domain/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
         elif args.domain_cnt == 3:
             train_path = f'../domain-generalization-for-anomaly-detection/data/pacs/semi-supervised/3domain/20240412-PACS-{normal_class}-{anomaly_class}.npz'
+            # train_path = f'../domain-generalization-for-anomaly-detection/data/three_source_domain/semi-supervised/20231228-PACS-{normal_class}-{anomaly_class}.npz'
         
         data = np.load(train_path, allow_pickle=True)
 

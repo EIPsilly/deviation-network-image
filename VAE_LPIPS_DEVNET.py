@@ -85,16 +85,16 @@ class Trainer(object):
             reconstructions, rec_loss, kl_loss, class_score, domain_score, class_classification, domain_classification = self.model(image, domain_label, target)
             
             devnet_loss = self.criterion(class_score, target.unsqueeze(1).float())
-            reg_loss = self.uniform_criterion(domain_score)
+            # reg_loss = self.uniform_criterion(domain_score)
             
-            PL_loss = nn.CrossEntropyLoss()(domain_classification / self.args.tau2, domain_label) * self.args.PL_lambda
-            class_classification = (class_classification / self.args.tau2).softmax(dim=1)
-            class_reg_loss = -torch.mean(torch.sum(-class_classification * torch.log(class_classification), dim=1))
-            
-            if epoch > 100:
-                loss = devnet_loss + reg_loss + PL_loss + class_reg_loss
-            else:
-                loss = (self.args.rec_lambda * rec_loss + kl_loss) + devnet_loss + reg_loss + PL_loss + class_reg_loss
+            # PL_loss = nn.CrossEntropyLoss()(domain_classification / self.args.tau2, domain_label) * self.args.PL_lambda
+            # class_classification = (class_classification / self.args.tau2).softmax(dim=1)
+            # class_reg_loss = -torch.mean(torch.sum(-class_classification * torch.log(class_classification), dim=1))
+            reg_loss = torch.zeros_like(devnet_loss)
+            PL_loss = torch.zeros_like(devnet_loss)
+            class_reg_loss = torch.zeros_like(devnet_loss)
+
+            loss = (self.args.rec_lambda * (rec_loss + kl_loss)) + devnet_loss + reg_loss + PL_loss + class_reg_loss
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -173,20 +173,18 @@ class Trainer(object):
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
             with torch.no_grad():
                 reconstructions, rec_loss, kl_loss, class_score, domain_score, class_classification, domain_classification = self.model(image, domain_label, target)
-                
+            
                 devnet_loss = self.criterion(class_score, target.unsqueeze(1).float())
-                reg_loss = self.uniform_criterion(domain_score)
+                # reg_loss = self.uniform_criterion(domain_score)
                 
-                if domain == "sketch":
-                    PL_loss = 0
-                else:
-                    PL_loss = nn.CrossEntropyLoss()(domain_classification / self.args.tau2, domain_label) * self.args.PL_lambda
+                # PL_loss = nn.CrossEntropyLoss()(domain_classification / self.args.tau2, domain_label) * self.args.PL_lambda
+                # class_classification = (class_classification / self.args.tau2).softmax(dim=1)
+                # class_reg_loss = -torch.mean(torch.sum(-class_classification * torch.log(class_classification), dim=1))
+                reg_loss = torch.zeros_like(devnet_loss)
+                PL_loss = torch.zeros_like(devnet_loss)
+                class_reg_loss = torch.zeros_like(devnet_loss)
 
-                class_classification = (class_classification / self.args.tau2).softmax(dim=1)
-                class_reg_loss = -torch.mean(torch.sum(-class_classification * torch.log(class_classification), dim=1))
-                
-
-                loss = self.args.rec_lambda * rec_loss + kl_loss + devnet_loss + reg_loss + PL_loss + class_reg_loss
+                loss = (self.args.rec_lambda * (rec_loss + kl_loss)) + devnet_loss + reg_loss + PL_loss + class_reg_loss
                 
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())

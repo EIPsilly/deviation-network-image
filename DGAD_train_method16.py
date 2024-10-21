@@ -1,5 +1,4 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import time
 from line_profiler import LineProfiler
@@ -12,7 +11,7 @@ import torch.nn.functional as F
 import argparse
 
 from dataloaders.dataloader import build_dataloader
-from modeling.DGAD_net_method13 import DGAD_net
+from modeling.DGAD_net_method15 import DGAD_net
 from tqdm import tqdm
 from utils import aucPerformance
 from modeling.layers import build_criterion
@@ -84,7 +83,7 @@ class Trainer(object):
                 image, target, augimg, domain_label = image.cuda(), target.cuda(), augimg.cuda(), domain_label.cuda()
 
             scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
-            _, _, aug_class_feature, aug_texture_feature, _ = self.model(image)
+            _, _, aug_class_feature, aug_texture_feature, _ = self.model(augimg)
             devnet_loss = self.criterion(scores, target.unsqueeze(1).float())
             
             reg_loss = self.uniform_criterion(texture_scores)
@@ -111,7 +110,7 @@ class Trainer(object):
             domain_similarity_matrix = domain_similarity_matrix.softmax(dim=1)
             class_reg_loss = -torch.mean(torch.sum(-domain_similarity_matrix * torch.log(domain_similarity_matrix), dim=1))
             
-            loss = devnet_loss + self.args.reg_lambda * reg_loss + self.args.NCE_lambda * NCE_loss + self.args.PL_lambda * PL_loss + class_reg_loss
+            loss = devnet_loss + self.args.reg_lambda * reg_loss + self.args.NCE_lambda * NCE_loss + self.args.PL_lambda * PL_loss + self.args.class_lambda * class_reg_loss
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -232,6 +231,7 @@ if __name__ == '__main__':
     parser.add_argument("--reg_lambda", type=float, default=1.0)
     parser.add_argument("--NCE_lambda", type=float, default=1.0)
     parser.add_argument("--PL_lambda", type=float, default=1.0)
+    parser.add_argument("--class_lambda", type=float, default=1.0)
     parser.add_argument("--pretrained", type=int, default=1)
     parser.add_argument("--test_epoch", type=int, default=5)
     parser.add_argument("--confidence_margin", type=int, default=5)
@@ -250,16 +250,15 @@ if __name__ == '__main__':
     parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-    parser.add_argument('--backbone', type=str, default='DGAD6', help="the backbone network")
+    parser.add_argument('--backbone', type=str, default='DGAD15', help="the backbone network")
     parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
-    parser.add_argument("--method", type=int, default=13)
+    parser.add_argument("--method", type=int, default=16)
 
     args = parser.parse_args()
-    # args = parser.parse_args(["--data_name", "MVTEC_with_domain_label", "--domain_cnt", "4"])
     
     if args.pretrained == 1:
         args.pretrained = True
@@ -267,11 +266,11 @@ if __name__ == '__main__':
         args.pretrained = False
     args.experiment_dir = f"experiment{args.results_save_path}"
     if args.data_name.__contains__("PACS"):
-        model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
-        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+        model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},class_lambda={args.class_lambda}'
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},class_lambda={args.class_lambda},cnt={args.cnt}'
     if args.data_name.__contains__("MVTEC"):
         model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
-        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},tau1={args.tau1},tau2={args.tau2},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

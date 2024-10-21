@@ -13,7 +13,7 @@ class DGAD_net(nn.Module):
     
 
     def forward(self, image):
-
+        
         if self.args.n_scales == 0:
             raise ValueError
 

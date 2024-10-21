@@ -55,7 +55,7 @@ class DiagonalGaussianDistribution(object):
         return x
     
     def sample_class_feature(self):
-        x = self.class_mean + self.class_std * torch.randn(self.class_mean .shape).to(device=self.parameters.device)
+        x = self.class_mean + self.class_std * torch.randn(self.class_mean.shape).to(device=self.parameters.device)
         return x
 
     def sample_domain_feature(self):

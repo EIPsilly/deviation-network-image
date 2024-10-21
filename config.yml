@@ -1,0 +1,35 @@
+mnist_grey_root: ../dataset/mnist_png
+mnist_m_root: ../dataset/mnist_m
+cifar_10_ood_root: ../dataset/ood/cifar10_ood
+mvtec_ood_root: ../dataset/ood/mvtec_ood
+PACS_root: ../dataset/PACS
+PACS_domain_to_idx:
+  art_painting: 0
+  cartoon: 1
+  photo: 2
+  sketch: 3
+PACS_class_to_idx:
+  dog: 0
+  elephant: 1
+  giraffe: 2
+  guitar: 3
+  horse: 4
+  house: 5
+  person: 6
+PACS_idx_to_class:
+  0: dog
+  1: elephant
+  2: giraffe
+  3: guitar
+  4: horse
+  5: house
+  6: person
+MVTEC_domain_to_idx:
+  origin: 0
+  brightness: 1
+  contrast: 2
+  defocus_blur: 3
+  defocus: 3
+  gaussian_noise: 4
+model_save: ./checkpoint
+result_save: ./results

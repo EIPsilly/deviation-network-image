@@ -36,7 +36,6 @@ class DGAD_net(nn.Module):
     
 
     def forward(self, image):
-        self.encoder.eval()
         if self.args.n_scales == 0:
             raise ValueError
         
