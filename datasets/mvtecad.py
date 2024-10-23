@@ -52,7 +52,7 @@ class MVTecAD(BaseADDataset):
             print(len(outlier_data))
             print("Number of outlier data in training set should less than half of outlier datas!")
             sys.exit()
-        np.random.RandomState(self.args.ramdn_seed).shuffle(outlier_data)
+        np.random.RandomState(self.args.random_seed).shuffle(outlier_data)
         if self.train:
             return outlier_data[0:self.args.n_anomaly]
         else:

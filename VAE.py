@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument("--PL_lambda", type=float, default=1.0)
     parser.add_argument("--test_epoch", type=int, default=5)
 
-    parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
+    parser.add_argument("--random_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
@@ -238,7 +238,7 @@ if __name__ == '__main__':
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     trainer = Trainer(args)
-    torch.manual_seed(args.ramdn_seed)
+    torch.manual_seed(args.random_seed)
 
     if not os.path.exists(args.experiment_dir):
         os.makedirs(args.experiment_dir)

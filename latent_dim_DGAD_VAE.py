@@ -250,7 +250,7 @@ if __name__ == '__main__':
     parser.add_argument("--test_epoch", type=int, default=5)
     parser.add_argument("--confidence_margin", type=int, default=5)
 
-    parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
+    parser.add_argument("--random_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=32, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     # pre_train_model_name = 'experiment/DGAD/VAE_LPIPS/method=VAE_LPIPS,backbone=VAE,domain_cnt=3,normal_class=[0],anomaly_class=[1, 2, 3, 4, 5, 6],batch_size=30,steps_per_epoch=20,epochs=250,lr=0.0001,tau1=0.07,tau2=0.07,reg_lambda=1.0,NCE_lambda=1.0,PL_lambda=1.0,BalancedBatchSampler=1,cnt=2'
     # trainer.load_pretrain_weights(pre_train_model_name)
 
-    torch.manual_seed(args.ramdn_seed)
+    torch.manual_seed(args.random_seed)
     
 
     if not os.path.exists(args.experiment_dir):

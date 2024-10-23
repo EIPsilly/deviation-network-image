@@ -236,7 +236,7 @@ if __name__ == '__main__':
     parser.add_argument("--test_epoch", type=int, default=5)
     parser.add_argument("--confidence_margin", type=int, default=5)
 
-    parser.add_argument("--ramdn_seed", type=int, default=42, help="the random seed number")
+    parser.add_argument("--random_seed", type=int, default=42, help="the random seed number")
     parser.add_argument('--workers', type=int, default=16, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
@@ -266,16 +266,14 @@ if __name__ == '__main__':
         args.pretrained = False
     args.experiment_dir = f"experiment{args.results_save_path}"
     if args.data_name.__contains__("PACS"):
-        model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},class_lambda={args.class_lambda}'
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},class_lambda={args.class_lambda},cnt={args.cnt}'
     if args.data_name.__contains__("MVTEC"):
-        model_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda}'
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     trainer = Trainer(args)
-    torch.manual_seed(args.ramdn_seed)
+    torch.manual_seed(args.random_seed)
 
     if not os.path.exists(args.experiment_dir):
         os.makedirs(args.experiment_dir)
