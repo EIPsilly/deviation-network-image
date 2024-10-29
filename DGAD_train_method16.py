@@ -125,7 +125,7 @@ class Trainer(object):
         self.scheduler.step()
         self.domain_key = "val"
         val_loss_list, val_auroc, val_auprc, total_pred, total_target = self.eval(self.val_loader)
-        if (epoch == 0)  or ((epoch - 1) %  self.args.test_epoch == 0):
+        if (epoch == 0)  or ((epoch + 1) %  self.args.test_epoch == 0):
             test_start = time.time()
             test_metric = self.test()
             end = time.time()
@@ -136,7 +136,7 @@ class Trainer(object):
             print(f'train time: {end - train_start}')
 
         if self.args.save_embedding == 1:
-            np.savez(f"./results/intermediate_results/epoch={epoch}.npz",
+            np.savez(f"./results/intermediate_results/{self.args.results_save_path}/{self.args.file_name},epoch={epoch}.npz",
                      domain_prototype = self.model.domain_prototype.weight.cpu().detach().numpy(),
                      center = self.model.center.cpu().numpy(),
                      class_feature = np.concatenate(class_feature_list),
@@ -200,7 +200,7 @@ class Trainer(object):
             total_target = np.append(total_target, target.cpu().numpy())
         roc, pr = aucPerformance(total_pred, total_target)
         if self.args.save_embedding == 1:
-            np.savez(f"./results/intermediate_results/epoch={self.epoch},{self.domain_key}.npz",
+            np.savez(f"./results/intermediate_results/{self.args.results_save_path}/{self.args.file_name},epoch={self.epoch},{self.domain_key}.npz",
                      class_feature_list=np.concatenate(class_feature_list),
                      texture_feature_list=np.concatenate(texture_feature_list),
                      target_list=np.concatenate(target_list),
@@ -219,7 +219,8 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
+    parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--lr",type=float,default=0.0002)
     parser.add_argument("--batch_size", type=int, default=30, help="batch size used in SGD")
@@ -255,7 +256,7 @@ if __name__ == '__main__':
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-    parser.add_argument("--domain_cnt", type=int, default=3)
+    parser.add_argument("--domain_cnt", type=int, default=4)
     parser.add_argument("--method", type=int, default=16)
 
     args = parser.parse_args()
@@ -270,7 +271,8 @@ if __name__ == '__main__':
     if args.data_name.__contains__("MVTEC"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-
+    
+    args.file_name = file_name
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     trainer = Trainer(args)
     torch.manual_seed(args.random_seed)
@@ -280,6 +282,10 @@ if __name__ == '__main__':
 
     if not os.path.exists(f"results{args.results_save_path}"):
         os.makedirs(f"results{args.results_save_path}")
+    
+    if args.save_embedding == 1:
+        if not os.path.exists(f"results/intermediate_results/{args.results_save_path}"):
+            os.makedirs(f"results/intermediate_results/{args.results_save_path}")
 
     argsDict = args.__dict__
     with open(args.experiment_dir + '/setting.txt', 'w') as f:

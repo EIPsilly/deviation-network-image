@@ -54,8 +54,9 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
     parser.add_argument("--checkitew", type=str, default="bottle")
+    parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--lr",type=float,default=0.0002)
     parser.add_argument("--batch_size", type=int, default=30, help="batch size used in SGD")
     parser.add_argument("--steps_per_epoch", type=int, default=20, help="the number of batches per epoch")
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-    parser.add_argument("--domain_cnt", type=int, default=3)
+    parser.add_argument("--domain_cnt", type=int, default=4)
     parser.add_argument("--method", type=int, default=0)
 
     args = parser.parse_args()
@@ -103,8 +104,10 @@ if __name__ == '__main__':
     args.experiment_dir = f"experiment{args.results_save_path}"
     if args.data_name.__contains__("PACS"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class}'
+        domain_list = ['photo', 'art_painting', 'cartoon', 'sketch']
     if args.data_name.__contains__("MVTEC"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew}'
+        domain_list = ['origin', 'brightness', 'contrast', 'defocus_blur', 'gaussian_noise']
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -120,7 +123,8 @@ if __name__ == '__main__':
     train_embeddings, train_labels = trainer.train(trainer.train_loader)
     val_embeddings, val_labels = trainer.train(trainer.val_loader)
     test_dict = dict()
-    for key in ['photo', 'art_painting', 'cartoon', 'sketch']:
+    
+    for key in domain_list:
         embeddings, labels = trainer.train(trainer.test_loader[key])
         test_dict[key] = {
             "embeddings" : embeddings,
@@ -128,17 +132,35 @@ if __name__ == '__main__':
         }
     
     print(f'results{args.results_save_path}/{file_name}.npz')
-    np.savez(f'results{args.results_save_path}/{file_name}.npz',
-             train_embeddings = train_embeddings,
-             val_embeddings = val_embeddings,
-             train_labels = train_labels,
-             val_labels = val_labels,
-             test_photo = test_dict["photo"]["embeddings"],
-             test_photo_labels = test_dict["photo"]["labels"],
-             test_art_painting = test_dict["art_painting"]["embeddings"],
-             test_art_painting_labels = test_dict["art_painting"]["labels"],
-             test_cartoon = test_dict["cartoon"]["embeddings"],
-             test_cartoon_labels = test_dict["cartoon"]["labels"],
-             test_sketch = test_dict["sketch"]["embeddings"],
-             test_sketch_labels = test_dict["sketch"]["labels"]
-             )
+    if args.data_name.__contains__("PACS"):
+        np.savez(f'results{args.results_save_path}/{file_name}.npz',
+                train_embeddings = train_embeddings,
+                val_embeddings = val_embeddings,
+                train_labels = train_labels,
+                val_labels = val_labels,
+                test_photo = test_dict["photo"]["embeddings"],
+                test_photo_labels = test_dict["photo"]["labels"],
+                test_art_painting = test_dict["art_painting"]["embeddings"],
+                test_art_painting_labels = test_dict["art_painting"]["labels"],
+                test_cartoon = test_dict["cartoon"]["embeddings"],
+                test_cartoon_labels = test_dict["cartoon"]["labels"],
+                test_sketch = test_dict["sketch"]["embeddings"],
+                test_sketch_labels = test_dict["sketch"]["labels"]
+                )
+    if args.data_name.__contains__("MVTEC"):
+        np.savez(f'results{args.results_save_path}/{file_name}.npz',
+                train_embeddings = train_embeddings,
+                val_embeddings = val_embeddings,
+                train_labels = train_labels,
+                val_labels = val_labels,
+                test_origin = test_dict["origin"]["embeddings"],
+                test_origin_labels = test_dict["origin"]["labels"],
+                test_brightness = test_dict["brightness"]["embeddings"],
+                test_brightness_labels = test_dict["brightness"]["labels"],
+                test_contrast = test_dict["contrast"]["embeddings"],
+                test_contrast_labels = test_dict["contrast"]["labels"],
+                test_defocus_blur = test_dict["defocus_blur"]["embeddings"],
+                test_defocus_blur_labels = test_dict["defocus_blur"]["labels"],
+                test_gaussian_noise = test_dict["gaussian_noise"]["embeddings"],
+                test_gaussian_noise_labels = test_dict["gaussian_noise"]["labels"]
+                )

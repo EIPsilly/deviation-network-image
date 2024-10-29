@@ -115,7 +115,7 @@ def augmvtec(image, preprocess, severity=3, width=3, depth=-1, alpha=1.):
 
 
 class MVTEC_Dataset(Dataset):
-    def __init__(self, x, y, transform=None, target_transform=None, augment_transform = None):
+    def __init__(self, args, x, y, transform=None, target_transform=None, augment_transform = None):
         self.image_paths = x
         self.labels = y
         self.transform = transform
@@ -126,8 +126,14 @@ class MVTEC_Dataset(Dataset):
         resize_transform = transforms.Compose([
             transforms.Resize((256, 256)),
             ])
+        if ("severity" in args == False) or (args.severity == 3):
+            root = config["mvtec_ood_root"]
+        elif args.severity == 4:
+            root = config["mvtec_ood_root_severity4"]
+        elif args.severity == 5:
+            root = config["mvtec_ood_root_severity5"]
         for img_path in self.image_paths:
-            img = Image.open(config["mvtec_ood_root"] + img_path).convert('RGB')
+            img = Image.open(root + img_path).convert('RGB')
             img = resize_transform(img)
             self.img_list.append(img)
         
@@ -185,10 +191,10 @@ class MVTEC_Data():
                         std=torch.tensor(std))
         ])
         
-        self.train_data = MVTEC_Dataset(data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.train_data = MVTEC_Dataset(args, data["train_set_path"], data["train_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
         unlabeled_idx = np.where(data["train_labels"] == 0)[0]
-        self.unlabeled_data = MVTEC_Dataset(data["train_set_path"][unlabeled_idx], data["train_labels"][unlabeled_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
-        self.val_data = MVTEC_Dataset(data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.unlabeled_data = MVTEC_Dataset(args, data["train_set_path"][unlabeled_idx], data["train_labels"][unlabeled_idx], transform=train_transform, target_transform=None, augment_transform = augment_transform)
+        self.val_data = MVTEC_Dataset(args, data["val_set_path"], data["val_labels"], transform=train_transform, target_transform=None, augment_transform = augment_transform)
 
         logging.info("y_train\t" + str(dict(sorted(Counter(data["train_labels"]).items()))))
         logging.info("y_val\t" + str(dict(sorted(Counter(data["val_labels"]).items()))))
@@ -196,7 +202,7 @@ class MVTEC_Data():
         print("y_val\t" + str(dict(sorted(Counter(data["val_labels"]).items()))))
         self.test_dict = {}
         for domain in ["origin", "brightness", "contrast", "defocus_blur", "gaussian_noise"]:
-            self.test_dict[domain] = MVTEC_Dataset(data[f"test_{domain}"], data[f"test_{domain}_labels"], transform=test_transform, target_transform=None, augment_transform = augment_transform)
+            self.test_dict[domain] = MVTEC_Dataset(args, data[f"test_{domain}"], data[f"test_{domain}_labels"], transform=test_transform, target_transform=None, augment_transform = augment_transform)
             logging.info(domain + "\ty_test\t" + str(dict(sorted(Counter(data[f"test_{domain}_labels"]).items()))))
             print(domain + "\ty_test\t" + str(dict(sorted(Counter(data[f"test_{domain}_labels"]).items()))))
             

@@ -31,9 +31,16 @@ class MVTEC_Dataset(Dataset):
             ])
         self.domain_labels = np.empty_like(self.labels)
 
+        if ("severity" in args == False) or (args.severity == 3):
+            root = config["mvtec_ood_root"]
+        elif args.severity == 4:
+            root = config["mvtec_ood_root_severity4"]
+        elif args.severity == 5:
+            root = config["mvtec_ood_root_severity5"]
+
         for idx, img_path in enumerate(self.image_paths):
             self.domain_labels[idx] = domain_to_idx[img_path.split("/")[1].replace("mvtec_", "")]
-            img = Image.open(config["mvtec_ood_root"] + img_path).convert('RGB')
+            img = Image.open(root + img_path).convert('RGB')
             img = resize_transform(img)
             self.img_list.append(img)
         

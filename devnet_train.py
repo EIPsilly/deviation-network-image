@@ -108,6 +108,7 @@ class Trainer(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_name", type=str, default="PACS")
+    parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--lr",type=float,default=0.0002)
     parser.add_argument("--batch_size", type=int, default=48, help="batch size used in SGD")
@@ -139,7 +140,7 @@ if __name__ == '__main__':
 
     # args = parser.parse_args(["--backbone", "DGAD", "--epochs", "15", "--lr", "0.00001"])
     args = parser.parse_args()
-    # args = parser.parse_args(["--data_name", "MVTEC", "--domain_cnt", "4"])
+    # args = parser.parse_args(["--data_name", "MVTEC", "--domain_cnt", "4", "--severity", "5"])
     if args.pretrained == 1:
         args.pretrained = True
     else:
