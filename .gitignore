@@ -1,6 +1,5 @@
 __pycache__
 experiment
-analysis
 results
 *.sh
 *.log

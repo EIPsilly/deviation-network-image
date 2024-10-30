@@ -125,16 +125,7 @@ class Trainer(object):
         self.scheduler.step()
         self.domain_key = "val"
         val_loss_list, val_auroc, val_auprc, total_pred, total_target = self.eval(self.val_loader)
-        if (epoch == 0)  or ((epoch + 1) %  self.args.test_epoch == 0):
-            test_start = time.time()
-            test_metric = self.test()
-            end = time.time()
-            print(f'train time: {end - train_start}\t test time: {end - test_start}')
-        else:
-            test_metric=None
-            end = time.time()
-            print(f'train time: {end - train_start}')
-
+        
         if self.args.save_embedding == 1:
             np.savez(f"./results/intermediate_results/{self.args.results_save_path}/{self.args.file_name},epoch={epoch}.npz",
                      domain_prototype = self.model.domain_prototype.weight.cpu().detach().numpy(),
@@ -146,6 +137,16 @@ class Trainer(object):
                      total_pred = total_pred,
                      total_target = total_target)
         
+        if (epoch == 0)  or ((epoch + 1) %  self.args.test_epoch == 0):
+            test_start = time.time()
+            test_metric = self.test()
+            end = time.time()
+            print(f'train time: {end - train_start}\t test time: {end - test_start}')
+        else:
+            test_metric=None
+            end = time.time()
+            print(f'train time: {end - train_start}')
+
         return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list
     
     def test(self):
@@ -206,6 +207,7 @@ class Trainer(object):
                      target_list=np.concatenate(target_list),
                      domain_label_list=np.concatenate(domain_label_list),
                      total_pred=total_pred,
+                     total_target=total_target,
                      AUROC=np.array(roc),
                      AUPRC=np.array(pr),
                      )
