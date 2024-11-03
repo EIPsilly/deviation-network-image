@@ -54,7 +54,8 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--contamination_rate", type=float ,default=0)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--lr",type=float,default=0.0002)
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-    parser.add_argument("--domain_cnt", type=int, default=4)
+    parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=0)
 
     args = parser.parse_args()
@@ -103,7 +104,10 @@ if __name__ == '__main__':
         args.pretrained = False
     args.experiment_dir = f"experiment{args.results_save_path}"
     if args.data_name.__contains__("PACS"):
-        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class}'
+        if args.contamination_rate != 0:
+            file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},contamination={args.contamination_rate}'
+        else:
+            file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class}'
         domain_list = ['photo', 'art_painting', 'cartoon', 'sketch']
     if args.data_name.__contains__("MVTEC"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew}'

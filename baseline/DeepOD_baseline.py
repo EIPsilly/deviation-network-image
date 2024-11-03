@@ -1,5 +1,6 @@
 import os
 
+import random
 import time
 from line_profiler import LineProfiler
 from collections import Counter
@@ -17,7 +18,8 @@ from deepod.models.tabular import *
 from deepod.metrics import tabular_metrics
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
+parser.add_argument("--contamination_rate", type=float ,default=0.06)
 parser.add_argument("--severity", type=int, default=3)
 parser.add_argument("--checkitew", type=str, default="bottle")
 parser.add_argument("--lr",type=float,default=0.0002)
@@ -46,8 +48,8 @@ parser.add_argument('--classname', type=str, default='carpet', help="the subclas
 parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
 parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
 
-parser.add_argument("--normal_class", nargs="+", type=int, default=[5])
-parser.add_argument("--anomaly_class", nargs="+", type=int, default=[0,1,2,3,4,6])
+parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
+parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
 parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
 parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
 parser.add_argument('--backbone', type=str, default='DeepSAD', help="the backbone network")
@@ -55,7 +57,7 @@ parser.add_argument('--criterion', type=str, default='deviation', help="the loss
 parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
 parser.add_argument("--gpu",type=str, default="3")
 parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-parser.add_argument("--domain_cnt", type=int, default=3)
+parser.add_argument("--domain_cnt", type=int, default=4)
 parser.add_argument("--method", type=int, default=0)
 
 args = parser.parse_args()
@@ -65,25 +67,31 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 if args.data_name.__contains__("PACS"):
     data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
+    if args.contamination_rate != 0:
+        data_name += f",contamination={args.contamination_rate}"
+        file_name += f",contamination={args.contamination_rate}"
     data = np.load(f'results/PACS_embedding/{data_name}.npz', allow_pickle=True)
     domain_list = ['photo', 'art_painting', 'cartoon', 'sketch']
 if args.data_name.__contains__("MVTEC"):
     data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},checkitew={args.checkitew}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
-    data = np.load(f'results/PACS_embedding_embedding/{data_name}.npz', allow_pickle=True)
+    data = np.load(f'results/MVTEC_embedding/{data_name}.npz', allow_pickle=True)
     domain_list = ['origin', 'brightness', 'contrast', 'defocus_blur', 'gaussian_noise']
 
 if not os.path.exists(f"results{args.results_save_path}"):
     os.makedirs(f"results{args.results_save_path}")
 
+print(f'train_labels:{Counter(data["train_labels"].squeeze())}')
+print(f'val_labels:{Counter(data["val_labels"].squeeze())}')
+random_seed = random.randint(0, 2**32 - 1)
 if args.backbone == "DeepSAD":
-    clf = DeepSAD(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2)
+    clf = DeepSAD(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2, random_state=random_seed)
     clf.fit(data["train_embeddings"], data["train_labels"].squeeze())
 if args.backbone == "PReNet":
-    clf = PReNet(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2)
+    clf = PReNet(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2, random_state=random_seed)
     clf.fit(data["train_embeddings"], data["train_labels"])
 if args.backbone == "RoSAS":
-    clf = RoSAS(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2)
+    clf = RoSAS(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2, random_state=random_seed)
     clf.fit(data["train_embeddings"], data["train_labels"])
 
 result = dict()
@@ -98,6 +106,7 @@ result["val"]={
 for key in domain_list:
     scores = clf.decision_function(data[f"test_{key}"])
     auc, ap, f1 = tabular_metrics(data[f"test_{key}_labels"], scores)
+    print(f'test_{key}_labels:{Counter(data[f"test_{key}_labels"].squeeze())}')
     result[key]={
         'AUC': auc, 'AP': ap, 'F1': f1
     }

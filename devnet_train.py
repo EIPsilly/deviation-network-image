@@ -108,6 +108,7 @@ class Trainer(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_name", type=str, default="PACS")
+    parser.add_argument("--contamination_rate", type=float ,default=0.02)
     parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--lr",type=float,default=0.0002)
@@ -148,7 +149,7 @@ if __name__ == '__main__':
 
     args.experiment_dir = f"experiment{args.results_save_path}"
     if args.data_name == "PACS":
-        file_name = f'data_name={args.data_name},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
+        file_name = f'data_name={args.data_name},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},contamination={args.contamination_rate},cnt={args.cnt}'
     if args.data_name == "MVTEC":
         file_name = f'data_name={args.data_name},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu

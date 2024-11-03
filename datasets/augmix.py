@@ -103,7 +103,7 @@ def augpacs(image, preprocess, severity=3, width=3, depth=-1, alpha=1.):
     return mixed
 
 def augmvtec(image, preprocess, severity=3, width=3, depth=-1, alpha=1.):
-    aug_list = [ autocontrast, equalize, posterize, solarize, color, sharpness]
+    aug_list = [ equalize, posterize, solarize, color, sharpness]
     severity = random.randint(0, severity)
 
     ws = np.float32(np.random.dirichlet([1] * width))

@@ -44,22 +44,22 @@ class Trainer(object):
             self.criterion = self.criterion.cuda()
             self.uniform_criterion = self.uniform_criterion.cuda()
 
-    def init_center(self):
-        self.model.eval()
-        # tbar = tqdm(self.train_loader)
-        feature_list = []
-        for i, sample in enumerate(self.unlabeled_loader):
-            idx, image, _, target, domain_label, semi_domain_label = sample
+    # def init_center(self):
+    #     self.model.eval()
+    #     # tbar = tqdm(self.train_loader)
+    #     feature_list = []
+    #     for i, sample in enumerate(self.unlabeled_loader):
+    #         idx, image, _, target, domain_label, semi_domain_label = sample
 
-            if self.args.cuda:
-                image, target = image.cuda(), target.cuda()
+    #         if self.args.cuda:
+    #             image, target = image.cuda(), target.cuda()
 
-            with torch.no_grad():
-                scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
+    #         with torch.no_grad():
+    #             scores, texture_scores, class_feature, texture_feature, origin_reg_feature = self.model(image)
             
-            feature_list.append(class_feature)
+    #         feature_list.append(class_feature)
         
-        self.model.center = F.normalize(torch.mean(torch.concat(feature_list), dim=0), dim=0)
+    #     self.model.center = F.normalize(torch.mean(torch.concat(feature_list), dim=0), dim=0)
     
     def train(self, epoch):
         self.epoch = epoch
@@ -95,8 +95,6 @@ class Trainer(object):
             target_list.append(target.cpu().detach().numpy())
             domain_label_list.append(domain_label.cpu().detach().numpy())
             
-            class_feature = F.normalize(class_feature - self.model.center) 
-            aug_class_feature = F.normalize(aug_class_feature - self.model.center) 
             similarity_matrix = torch.matmul(class_feature, aug_class_feature.T) / self.args.tau1
             NCE_loss = nn.CrossEntropyLoss()(similarity_matrix, torch.arange(class_feature.shape[0]).cuda())
             
@@ -260,7 +258,7 @@ if __name__ == '__main__':
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=4)
-    parser.add_argument("--method", type=int, default=16)
+    parser.add_argument("--method", type=int, default=17)
 
     args = parser.parse_args()
     
@@ -305,7 +303,7 @@ if __name__ == '__main__':
     val_AUROC_list = []
     val_AUPRC_list = []
     
-    trainer.init_center()
+    # trainer.init_center()
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
         # lp = LineProfiler()
