@@ -124,7 +124,7 @@ class Trainer(object):
             
         self.scheduler.step()
         self.domain_key = "val"
-        val_loss_list, val_auroc, val_auprc, total_pred, total_target = self.eval(self.val_loader)
+        val_loss_list, val_auroc, val_auprc, total_pred, total_target, file_name_list = self.eval(self.val_loader)
         
         if self.args.save_embedding == 1:
             np.savez(f"./results/intermediate_results/{self.args.results_save_path}/{self.args.file_name},epoch={epoch}.npz",
@@ -135,7 +135,8 @@ class Trainer(object):
                      target_list=np.concatenate(target_list),
                      domain_label_list=np.concatenate(domain_label_list),
                      total_pred = total_pred,
-                     total_target = total_target)
+                     total_target = total_target,
+                     file_name_list = file_name_list)
         
         if (epoch == 0)  or ((epoch + 1) %  self.args.test_epoch == 0):
             test_start = time.time()
@@ -154,19 +155,20 @@ class Trainer(object):
         for key in trainer.test_loader:
             self.domain_key = key
             print(key)
-            test_loss_list, test_auroc, test_auprc, total_pred, total_target = self.eval(trainer.test_loader[key])
+            test_loss_list, test_auroc, test_auprc, total_pred, total_target, file_name_list = self.eval(trainer.test_loader[key])
             test_metric[key] = {
                 "test_loss_list": test_loss_list,
                 "AUROC": test_auroc,
                 "AUPRC": test_auprc,
                 "pred":total_pred,
-                "target":total_target
+                "target":total_target,
+                "file_name_list": file_name_list
             }
         return test_metric
 
-    def eval(self, dataset):
+    def eval(self, dataloader):
         self.model.eval()
-        # tbar = tqdm(dataset, desc='\r')
+        # tbar = tqdm(dataloader, desc='\r')
         test_loss = 0.0
         total_pred = np.array([])
         total_target = np.array([])
@@ -175,7 +177,8 @@ class Trainer(object):
         texture_feature_list = []
         target_list = []
         domain_label_list = []
-        for i, sample in enumerate(dataset):
+        file_name_list = []
+        for i, sample in enumerate(dataloader):
             idx, image, _, target, domain_label, semi_domain_label = sample
             if self.args.cuda:
                 image, target, domain_label = image.cuda(), target.cuda(), domain_label.cuda()
@@ -190,6 +193,7 @@ class Trainer(object):
                 texture_feature_list.append(texture_feature.cpu().detach().numpy())
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
+                file_name_list.append(dataloader.dataset.image_paths[idx])
 
             loss = self.criterion(output, target.unsqueeze(1).float())
             # loss2 = torch.mean(torch.abs(output - invariant_score))
@@ -199,6 +203,7 @@ class Trainer(object):
             # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
             total_pred = np.append(total_pred, output.data.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
+        file_name_list=np.concatenate(file_name_list)
         roc, pr = aucPerformance(total_pred, total_target)
         if self.args.save_embedding == 1:
             np.savez(f"./results/intermediate_results/{self.args.results_save_path}/{self.args.file_name},epoch={self.epoch},{self.domain_key}.npz",
@@ -210,8 +215,9 @@ class Trainer(object):
                      total_target=total_target,
                      AUROC=np.array(roc),
                      AUPRC=np.array(pr),
+                     file_name_list=file_name_list
                      )
-        return loss_list, roc, pr, total_pred, total_target
+        return loss_list, roc, pr, total_pred, total_target, file_name_list
     
     def load_weights(self, filename):
         self.model.load_state_dict(torch.load(os.path.join(args.experiment_dir, filename)))
@@ -221,8 +227,8 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
-    parser.add_argument("--contamination_rate", type=float ,default=0)
+    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--contamination_rate", type=float ,default=0.12)
     parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--lr",type=float,default=0.0002)
@@ -259,7 +265,7 @@ if __name__ == '__main__':
     parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
     parser.add_argument("--gpu",type=str, default="3")
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-    parser.add_argument("--domain_cnt", type=int, default=4)
+    parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=16)
 
     args = parser.parse_args()
