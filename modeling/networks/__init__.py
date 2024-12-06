@@ -61,6 +61,10 @@ def build_feature_extractor(args):
         print(f"Feature extractor: {backbone}")
         from .VAE_LPIPS_DEVNET import VAE
         return VAE(args)
+    elif backbone == "VAE_LPIPS_DEVNET_1":
+        print(f"Feature extractor: {backbone}")
+        from .VAE_LPIPS_DEVNET_1 import VAE
+        return VAE(args)
     elif backbone == "DGAD15":
         print("Feature extractor: ResNet-DGAD15")
         from .DGAD_method15 import wide_resnet50_2
