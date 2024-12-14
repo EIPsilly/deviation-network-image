@@ -70,5 +70,13 @@ def build_feature_extractor(args):
         from .DGAD_method15 import wide_resnet50_2
         net = wide_resnet50_2(pretrained=args.pretrained)
         return net[0].to("cuda"), net[1].to("cuda")
+    elif backbone == "DGADshift1":
+        from .ADShift_DGAD_method1_resnet import wide_resnet50_2
+        from .ADShift_DGAD_method1_de_resnet import de_wide_resnet50_2
+        from .ADShift_DGAD_method1_resnet_TTA import wide_resnet50_2 as wide_resnet50_2_TTA
+        inference_encoder, _ = wide_resnet50_2_TTA()
+        encoder, bn = wide_resnet50_2(pretrained=True)
+        decoder = de_wide_resnet50_2(pretrained=False)
+        return encoder, bn, decoder, inference_encoder
     else:
         raise NotImplementedError

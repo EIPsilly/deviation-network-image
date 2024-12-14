@@ -52,6 +52,9 @@ class PACS_Dataset_with_domain_label(Dataset):
         self.normal_idx = np.where(self.labels==0)[0]
         self.outlier_idx = np.where(self.labels==1)[0]
 
+        self.domain_idx = []
+        for i in range(args.domain_cnt):
+            self.domain_idx.append(np.where(self.domain_labels == i)[0])
     def __len__(self):
         return len(self.image_paths)
 
