@@ -46,3 +46,41 @@ class BalancedBatchSampler(Sampler):
             for _ in range(self.n_outlier):
                 batch.append(next(self.outlier_generator))
             yield batch
+
+class DomainBalancedBatchSampler(Sampler):
+    def __init__(self,
+                 cfg,
+                 dataset: BaseADDataset):
+        super(DomainBalancedBatchSampler, self).__init__(dataset)
+        self.cfg = cfg
+        self.dataset = dataset
+        
+        self.domain_generator = []
+        for idx in self.dataset.domain_idx:
+            self.domain_generator.append(self.random_generator(idx))
+        
+        sample_cnt = self.cfg.batch_size // self.cfg.domain_cnt
+        self.sample_cnt_list = [sample_cnt] * self.cfg.domain_cnt
+        for i in range(self.cfg.batch_size % self.cfg.domain_cnt):
+            self.sample_cnt_list[i] += 1
+        
+
+    @staticmethod
+    def random_generator(idx_list):
+        while True:
+            random_list = np.random.permutation(idx_list)
+            for i in random_list:
+                yield i
+
+    def __len__(self):
+        return self.cfg.steps_per_epoch
+    
+    def __iter__(self):
+        for _ in range(self.cfg.steps_per_epoch):
+            batch = []
+
+            for i in range(self.cfg.domain_cnt):
+                for _ in range(self.sample_cnt_list[i]):
+                    batch.append(next(self.domain_generator[i]))
+            
+            yield batch

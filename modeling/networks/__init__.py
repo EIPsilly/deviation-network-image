@@ -1,5 +1,5 @@
 from torchvision.models import alexnet
-from modeling.networks.resnet18 import feature_resnet18, feature_resnet50, feature_wide_resnet50_2
+from modeling.networks.resnet18 import feature_resnet18, feature_resnet50, feature_wide_resnet50_2, feature_wide_resnet50_2_freeze
 
 NET_OUT_DIM = {'alexnet': 256, 'resnet18': 512, 'resnet50': 2048, "wide_resnet50_2": 2048, "DGAD": 2048, "DGAD4": 2048, "DGAD5": 2048, "DGAD6": 2048, "DGAD9": 2048, "DGAD15": 2048}
 
@@ -17,8 +17,10 @@ def build_feature_extractor(args):
         return feature_resnet50()
     elif backbone == "wide_resnet50_2":
         print("Feature extractor: wide_resnet50_2")
-        return feature_wide_resnet50_2(args)
-    
+        if (not "freeze" in args) or (args.freeze == 0):
+            return feature_wide_resnet50_2(args)
+        else:
+            return feature_wide_resnet50_2_freeze(args)
     elif backbone == "DGAD":
         print("Feature extractor: ResNet-DGAD")
         from .DGAD import wide_resnet50_2
