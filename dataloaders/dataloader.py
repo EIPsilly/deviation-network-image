@@ -4,6 +4,7 @@ from datasets.PACS import PACS_Data
 from datasets.PACS_with_domain_label import PACS_with_domain_label
 from datasets.MVTEC import MVTEC_Data
 from datasets.MVTEC_with_domain_label import MVTEC_with_domain_label
+from datasets.MNIST_with_domain_label import MNIST_with_domain_label
 from datasets.PACS_dataloader import PACSDataset
 
 def build_dataloader(args, **kwargs):
@@ -22,6 +23,9 @@ def build_dataloader(args, **kwargs):
 
     if args.data_name == "PACS_dataloader":
         data = PACSDataset(args)
+    
+    if args.data_name == "MNIST_with_domain_label":
+        data = MNIST_with_domain_label(args)
 
     train_set = data.train_data
     if ("BalancedBatchSampler" in args) and (args.BalancedBatchSampler == 0):

@@ -56,7 +56,7 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="MNIST_with_domain_label")
     parser.add_argument("--contamination_rate", type=float ,default=0)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--severity", type=int, default=3)
@@ -86,8 +86,8 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
     
-    parser.add_argument("--normal_class", nargs="+", type=int, default=[5])
-    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[0,1,2,3,4,6])
+    parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
+    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='wide_resnet50_2', help="the backbone network")
@@ -97,8 +97,10 @@ if __name__ == '__main__':
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=0)
-
+    parser.add_argument("--label_discount", type=float, default=1.0)
+    
     args = parser.parse_args()
+    args.label_discount = int(8 * 27 / args.label_discount)
     
     if args.pretrained == 1:
         args.pretrained = True
@@ -114,6 +116,10 @@ if __name__ == '__main__':
     if args.data_name.__contains__("MVTEC"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew}'
         domain_list = ['origin', 'brightness', 'contrast', 'defocus_blur', 'gaussian_noise']
+    if args.data_name.__contains__("MNIST"):
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount}'
+        domain_list = ["MNIST", "MNIST_M", "SYN", "SVHN"]
+
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -176,4 +182,25 @@ if __name__ == '__main__':
                 test_defocus_blur_labels = test_dict["defocus_blur"]["labels"],
                 test_gaussian_noise = test_dict["gaussian_noise"]["embeddings"],
                 test_gaussian_noise_labels = test_dict["gaussian_noise"]["labels"]
+                )
+    if args.data_name.__contains__("MNIST"):
+        np.savez(f'results{args.results_save_path}/{file_name}.npz',
+                train_embeddings = train_embeddings,
+                val_embeddings = val_embeddings,
+                train_labels = train_labels,
+                val_labels = val_labels,
+                train_domain_label = train_domain_label,
+                val_domain_label = val_domain_label,
+                test_MNIST = test_dict["MNIST"]["embeddings"],
+                test_MNIST_labels = test_dict["MNIST"]["labels"],
+                test_MNIST_domain_labels = test_dict["MNIST"]["domain_labels"],
+                test_MNIST_M = test_dict["MNIST_M"]["embeddings"],
+                test_MNIST_M_labels = test_dict["MNIST_M"]["labels"],
+                test_MNIST_M_domain_labels = test_dict["MNIST_M"]["domain_labels"],
+                test_SYN = test_dict["SYN"]["embeddings"],
+                test_SYN_labels = test_dict["SYN"]["labels"],
+                test_SYN_domain_labels = test_dict["SYN"]["domain_labels"],
+                test_SVHN = test_dict["SVHN"]["embeddings"],
+                test_SVHN_labels = test_dict["SVHN"]["labels"],
+                test_SVHN_domain_labels = test_dict["SVHN"]["domain_labels"],
                 )

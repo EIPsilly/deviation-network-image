@@ -18,7 +18,7 @@ from deepod.models.tabular import *
 from deepod.metrics import tabular_metrics
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
+parser.add_argument("--data_name", type=str, default="MNIST_with_domain_label")
 parser.add_argument("--contamination_rate", type=float ,default=0.06)
 parser.add_argument("--severity", type=int, default=3)
 parser.add_argument("--checkitew", type=str, default="bottle")
@@ -49,7 +49,7 @@ parser.add_argument('--img_size', type=int, default=448, help="the image size of
 parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
 
 parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
-parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
+parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
 parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
 parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
 parser.add_argument('--backbone', type=str, default='DeepSAD', help="the backbone network")
@@ -57,10 +57,12 @@ parser.add_argument('--criterion', type=str, default='deviation', help="the loss
 parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
 parser.add_argument("--gpu",type=str, default="3")
 parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-parser.add_argument("--domain_cnt", type=int, default=4)
+parser.add_argument("--domain_cnt", type=int, default=3)
 parser.add_argument("--method", type=int, default=0)
+parser.add_argument("--label_discount", type=float, default=1.0)
 
 args = parser.parse_args()
+args.label_discount = int(8 * 27 / args.label_discount)
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
@@ -77,6 +79,11 @@ if args.data_name.__contains__("MVTEC"):
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},batch_size={args.batch_size},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
     data = np.load(f'results/MVTEC_embedding/{data_name}.npz', allow_pickle=True)
     domain_list = ['origin', 'brightness', 'contrast', 'defocus_blur', 'gaussian_noise']
+if args.data_name.__contains__("MNIST"):
+    data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount}'
+    file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount},batch_size={args.batch_size},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
+    data = np.load(f'results/MNIST_embedding/{data_name}.npz', allow_pickle=True)
+    domain_list = ["MNIST", "MNIST_M", "SYN", "SVHN"]
 
 if not os.path.exists(f"results{args.results_save_path}"):
     os.makedirs(f"results{args.results_save_path}")

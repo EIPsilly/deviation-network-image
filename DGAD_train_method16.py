@@ -227,8 +227,8 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
-    parser.add_argument("--contamination_rate", type=float ,default=0.12)
+    parser.add_argument("--data_name", type=str, default="MNIST_with_domain_label")
+    parser.add_argument("--contamination_rate", type=float ,default=0.0)
     parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--lr",type=float,default=0.0002)
@@ -247,7 +247,7 @@ if __name__ == '__main__':
     parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--random_seed", type=int, default=42, help="the random seed number")
-    parser.add_argument('--workers', type=int, default=8, metavar='N', help='dataloader threads')
+    parser.add_argument('--workers', type=int, default=16, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
@@ -257,7 +257,8 @@ if __name__ == '__main__':
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
     
     parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
-    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
+    # parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
+    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='DGAD15', help="the backbone network")
@@ -267,6 +268,7 @@ if __name__ == '__main__':
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=16)
+    parser.add_argument("--label_discount", type=float, default=1.0)
 
     args = parser.parse_args()
     
@@ -275,10 +277,14 @@ if __name__ == '__main__':
     else:
         args.pretrained = False
     args.experiment_dir = f"experiment{args.results_save_path}"
+    args.label_discount = int(8 * 27 / args.label_discount)
+
     if args.data_name.__contains__("PACS"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},contamination={args.contamination_rate},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},class_lambda={args.class_lambda},cnt={args.cnt}'
     if args.data_name.__contains__("MVTEC"):
         file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},tau1={args.tau1},tau2={args.tau2},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},cnt={args.cnt}'
+    if args.data_name.__contains__("MNIST"):
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},steps_per_epoch={args.steps_per_epoch},epochs={args.epochs},lr={args.lr},reg_lambda={args.reg_lambda},NCE_lambda={args.NCE_lambda},PL_lambda={args.PL_lambda},class_lambda={args.class_lambda},label_discount={args.label_discount},cnt={args.cnt}'
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     
     args.file_name = file_name
@@ -312,6 +318,7 @@ if __name__ == '__main__':
     val_AUPRC_list = []
     
     trainer.init_center()
+    torch.cuda.empty_cache()
     test_results_list = []
     for epoch in range(0, trainer.args.epochs):
         # lp = LineProfiler()
