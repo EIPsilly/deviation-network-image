@@ -4,8 +4,8 @@ from modeling.networks.resnet18 import feature_resnet18, feature_resnet50, featu
 NET_OUT_DIM = {'alexnet': 256, 'resnet18': 512, 'resnet50': 2048, "wide_resnet50_2": 2048, "DGAD": 2048, "DGAD4": 2048, "DGAD5": 2048, "DGAD6": 2048, "DGAD9": 2048, "DGAD15": 2048}
 
 
-def build_feature_extractor(args):
-    backbone = args.backbone
+def build_feature_extractor(args, candidate=None):
+    backbone = args.backbone if candidate is None else candidate
     if backbone == "alexnet":
         print("Feature extractor: AlexNet")
         return alexnet(pretrained=True).features

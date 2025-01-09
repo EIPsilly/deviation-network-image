@@ -134,8 +134,8 @@ if __name__ == '__main__':
     parser.add_argument('--classname', type=str, default='carpet', help="the subclass of the datasets")
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     
-    parser.add_argument("--normal_class", nargs="+", type=int, default=[4])
-    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[0,1,2,3,5,6])
+    parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
+    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='wide_resnet50_2', help="the backbone network")

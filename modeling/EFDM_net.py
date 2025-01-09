@@ -9,7 +9,7 @@ class EFDM_net(nn.Module):
         super(EFDM_net, self).__init__()
         self.args = args
         self.backbone = backbone
-        feature_extractor = build_feature_extractor(self.args)
+        feature_extractor = build_feature_extractor(self.args, backbone)
         self.feature_extractor = feature_extractor[0]
         self.conv = nn.Conv2d(in_channels=NET_OUT_DIM[self.args.backbone], out_channels=1, kernel_size=1, padding=0)
 
