@@ -67,7 +67,6 @@ class Trainer(object):
         train_start = time.time()
         train_loss = 0.0
         self.model.train()
-        # tbar = tqdm(self.train_loader)
         train_loss_list = []
         sub_train_loss_list = []
         class_feature_list = []
@@ -118,7 +117,7 @@ class Trainer(object):
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
             train_loss += loss.item()
-            # tbar.set_description('Epoch:%d, Train loss: %.3f' % (epoch, train_loss / (i + 1)))
+
             train_loss_list.append(loss.item())
             sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(), class_reg_loss.item(), ])
             
@@ -200,7 +199,6 @@ class Trainer(object):
             # loss += loss2
             test_loss += loss.item()
             loss_list.append(loss.item())
-            # tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
             total_pred = np.append(total_pred, output.data.cpu().numpy())
             total_target = np.append(total_target, target.cpu().numpy())
         file_name_list=np.concatenate(file_name_list)
@@ -271,7 +269,6 @@ if __name__ == '__main__':
     parser.add_argument("--label_discount", type=float, default=1.0)
 
     args = parser.parse_args()
-    
     if args.pretrained == 1:
         args.pretrained = True
     else:
@@ -339,10 +336,10 @@ if __name__ == '__main__':
         val_AUPRC_list.append(val_auprc)
 
         test_results_list.append(test_metric)
-    
+
+
     trainer.load_weights(f'{file_name}.pt')
     val_max_metric["metric"] = trainer.test()
-    # test_metric = trainer.test()
     
     print(f'results{args.results_save_path}/{file_name}.npz')
     np.savez(f'results{args.results_save_path}/{file_name}.npz',
