@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import time
 from line_profiler import LineProfiler
 from collections import Counter
@@ -13,6 +13,29 @@ import sys
 sys.path.append("/home/hzw/DGAD/deviation-network-image")
 from dataloaders.dataloader import build_dataloader
 from torchvision import models
+
+try:
+    from torch.hub import load_state_dict_from_url
+except ImportError:
+    from torch.utils.model_zoo import load_url as load_state_dict_from_url
+
+from modeling.networks.res_encoder import ResNet as resnet_encoder
+from modeling.networks.res_decoder import ResNet as resnet_decoder
+from modeling.networks.res_encoder import Bottleneck as Bottleneck_encoder
+from modeling.networks.res_decoder import Bottleneck as Bottleneck_decoder
+import lpips
+
+model_urls = {
+    'resnet18': 'https://download.pytorch.org/models/resnet18-f37072fd.pth',
+    'resnet34': 'https://download.pytorch.org/models/resnet34-b627a593.pth',
+    'resnet50': 'https://download.pytorch.org/models/resnet50-0676ba61.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-63fe2227.pth',
+    'resnet152': 'https://download.pytorch.org/models/resnet152-394f9c45.pth',
+    'resnext50_32x4d': 'https://download.pytorch.org/models/resnext50_32x4d-7cdf4587.pth',
+    'resnext101_32x8d': 'https://download.pytorch.org/models/resnext101_32x8d-8ba56ff5.pth',
+    'wide_resnet50_2': 'https://download.pytorch.org/models/wide_resnet50_2-95faca4d.pth',
+    'wide_resnet101_2': 'https://download.pytorch.org/models/wide_resnet101_2-32ee1156.pth',
+}
 
 def loss_fucntion(a, b):
     cos_loss = torch.nn.CosineSimilarity()
@@ -28,14 +51,45 @@ class Trainer(object):
         kwargs = {'num_workers': args.workers}
         self.train_loader, self.val_loader, self.test_loader, self.unlabeled_loader = build_dataloader(args, **kwargs)
         
-        self.model = models.wide_resnet50_2(pretrained=True)
-        self.model = nn.Sequential(*list(self.model.children())[:-1])
-        self.model.eval()
+        self.encoder = resnet_encoder(Bottleneck_encoder, [3, 4, 6, 3], return_indices=True, width_per_group = 64 * 2)
+        self.encoder.load_state_dict(load_state_dict_from_url(model_urls["wide_resnet50_2"]))
+        self.decoder = resnet_decoder(Bottleneck_decoder, [3, 6, 4, 3], width_per_group = 64 * 2)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.loss = lpips.LPIPS(net='vgg')
+        
+        self.optimizer = torch.optim.Adam([
+            {"params": self.encoder.parameters(), "lr" : args.lr},
+            {"params": self.decoder.parameters(), "lr" : args.lr}
+        ], weight_decay=1e-5)
 
         if args.cuda:
-            self.model = self.model.cuda()
+            self.encoder = self.encoder.cuda()
+            self.decoder = self.decoder.cuda()
+            self.loss = self.loss.cuda()
+            self.avgpool = self.avgpool.cuda()
     
     def train(self, data_loader):
+        loss_list = []
+        for i, sample in enumerate(data_loader):
+            idx, image, augimg, target, domain_label, semi_domain_label = sample
+
+            if self.args.cuda:
+                image = image.cuda()
+
+            x, indices = self.encoder(image)
+            output = self.decoder(x, indices)
+            loss = self.loss(image, output).mean()
+            
+            self.optimizer.zero_grad()
+            loss.backward()
+
+            self.optimizer.step()
+            print(loss.item())
+            loss_list.append(loss.item())
+        
+        return loss_list
+    
+    def test(self, data_loader):
         embeddings = []
         labels = []
         domain_labels = []
@@ -46,12 +100,12 @@ class Trainer(object):
                 image = image.cuda()
 
             with torch.no_grad():
-                embedding = self.model(image)
+                embedding, indices = self.encoder(image)
+                embedding = self.avgpool(embedding)
                 embeddings.append(embedding.view(image.shape[0], -1).cpu().numpy())
                 
             labels.append(target.view(-1, 1))
             domain_labels.append(domain_label.view(-1, 1))
-
         return np.concatenate(embeddings), np.concatenate(labels), np.concatenate(domain_labels)
 
 if __name__ == '__main__':
@@ -73,6 +127,7 @@ if __name__ == '__main__':
     parser.add_argument("--class_lambda", type=float, default=1.0)
     parser.add_argument("--pretrained", type=int, default=1)
     parser.add_argument("--test_epoch", type=int, default=5)
+    parser.add_argument("--input_img_size", type=int, default=253)
     parser.add_argument("--confidence_margin", type=int, default=5)
     parser.add_argument("--BalancedBatchSampler", type=int, default=0)
 
@@ -110,15 +165,15 @@ if __name__ == '__main__':
     args.experiment_dir = f"experiment{args.results_save_path}"
     if args.data_name.__contains__("PACS"):
         if args.contamination_rate != 0:
-            file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},contamination={args.contamination_rate}'
+            file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},epochs={args.epochs},lr={args.lr},contamination={args.contamination_rate}'
         else:
-            file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class}'
+            file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},epochs={args.epochs},lr={args.lr}'
         domain_list = ['photo', 'art_painting', 'cartoon', 'sketch']
     if args.data_name.__contains__("MVTEC"):
-        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew}'
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},checkitew={args.checkitew},epochs={args.epochs},lr={args.lr}'
         domain_list = ['origin', 'brightness', 'contrast', 'defocus_blur', 'gaussian_noise']
     if args.data_name.__contains__("MNIST"):
-        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount}'
+        file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount},epochs={args.epochs},lr={args.lr}'
         domain_list = ["MNIST", "MNIST_M", "SYN", "SVHN"]
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -132,13 +187,18 @@ if __name__ == '__main__':
 
     if not os.path.exists(f"results{args.results_save_path}"):
         os.makedirs(f"results{args.results_save_path}")
+    
+    train_loss_list = []
+    for i in range(args.epochs):
+        loss = trainer.train(trainer.train_loader)
+        train_loss_list.append(loss)
 
-    train_embeddings, train_labels, train_domain_label = trainer.train(trainer.train_loader)
-    val_embeddings, val_labels, val_domain_label = trainer.train(trainer.val_loader)
+    train_embeddings, train_labels, train_domain_label = trainer.test(trainer.train_loader)
+    val_embeddings, val_labels, val_domain_label = trainer.test(trainer.val_loader)
     test_dict = dict()
     
     for key in domain_list:
-        embeddings, labels, domain_label = trainer.train(trainer.test_loader[key])
+        embeddings, labels, domain_label = trainer.test(trainer.test_loader[key])
         test_dict[key] = {
             "embeddings" : embeddings,
             "labels" : labels,
@@ -148,6 +208,7 @@ if __name__ == '__main__':
     print(f'results{args.results_save_path}/{file_name}.npz')
     if args.data_name.__contains__("PACS"):
         np.savez(f'results{args.results_save_path}/{file_name}.npz',
+                train_loss_list = np.array(train_loss_list),
                 train_embeddings = train_embeddings,
                 val_embeddings = val_embeddings,
                 train_labels = train_labels,
@@ -169,6 +230,7 @@ if __name__ == '__main__':
                 )
     if args.data_name.__contains__("MVTEC"):
         np.savez(f'results{args.results_save_path}/{file_name}.npz',
+                train_loss_list = np.array(train_loss_list),
                 train_embeddings = train_embeddings,
                 val_embeddings = val_embeddings,
                 train_labels = train_labels,
@@ -184,8 +246,10 @@ if __name__ == '__main__':
                 test_gaussian_noise = test_dict["gaussian_noise"]["embeddings"],
                 test_gaussian_noise_labels = test_dict["gaussian_noise"]["labels"]
                 )
+
     if args.data_name.__contains__("MNIST"):
         np.savez(f'results{args.results_save_path}/{file_name}.npz',
+                train_loss_list = np.array(train_loss_list),
                 train_embeddings = train_embeddings,
                 val_embeddings = val_embeddings,
                 train_labels = train_labels,
