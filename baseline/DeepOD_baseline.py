@@ -8,14 +8,19 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import yaml
 
 import argparse
 import sys
 sys.path.append("/home/hzw/DGAD/deviation-network-image")
+sys.path.append("/data/DGAD/deviation-network-image")
 from dataloaders.dataloader import build_dataloader
 from torchvision import models
 from deepod.models.tabular import *
 from deepod.metrics import tabular_metrics
+
+with open("baseline/embedding_data.yaml", 'r', encoding="utf-8") as f:
+    config = yaml.load(f.read(), Loader=yaml.FullLoader)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
@@ -67,12 +72,15 @@ args.label_discount = int(8 * 27 / args.label_discount)
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 if args.data_name.__contains__("PACS"):
-    data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class}'
+    data_epoch = config[f'{args.domain_cnt}domain']["PACS"]["epochs"][args.normal_class[0]]
+    data_lr = config[f'{args.domain_cnt}domain']["PACS"]["lr"][args.normal_class[0]]
+    data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},epochs={data_epoch},lr={data_lr}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},batch_size={args.batch_size},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
     if args.contamination_rate != 0:
         data_name += f",contamination={args.contamination_rate}"
         file_name += f",contamination={args.contamination_rate}"
-    data = np.load(f'results/PACS_embedding/{data_name}.npz', allow_pickle=True)
+    # data = np.load(f'results/PACS_embedding/{data_name}.npz', allow_pickle=True)
+    data = np.load(f'results/PACS_1domain_encoder_embedding/{data_name}.npz', allow_pickle=True)
     domain_list = ['photo', 'art_painting', 'cartoon', 'sketch']
 if args.data_name.__contains__("MVTEC"):
     data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},checkitew={args.checkitew}'

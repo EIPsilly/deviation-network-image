@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import argparse
 import sys
 sys.path.append("/home/hzw/DGAD/deviation-network-image")
+sys.path.append("/data/DGAD/deviation-network-image")
 from dataloaders.dataloader import build_dataloader
 from torchvision import models
 
