@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import time
 from line_profiler import LineProfiler
 from collections import Counter
@@ -56,7 +56,7 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="MVTEC_with_domain_label")
     parser.add_argument("--contamination_rate", type=float ,default=0)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--severity", type=int, default=3)
