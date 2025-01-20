@@ -192,7 +192,7 @@ class Trainer(object):
                 texture_feature_list.append(texture_feature.cpu().detach().numpy())
                 target_list.append(target.cpu().numpy())
                 domain_label_list.append(domain_label.cpu().numpy())
-                file_name_list.append(dataloader.dataset.image_paths[idx])
+                file_name_list.append(np.array(dataloader.dataset.image_paths[idx]).reshape(-1))
 
             loss = self.criterion(output, target.unsqueeze(1).float())
             # loss2 = torch.mean(torch.abs(output - invariant_score))
@@ -266,6 +266,7 @@ if __name__ == '__main__':
     parser.add_argument("--results_save_path", type=str, default="/DEBUG")
     parser.add_argument("--domain_cnt", type=int, default=3)
     parser.add_argument("--method", type=int, default=16)
+    parser.add_argument("--in_domain_type", nargs="+", type=str, default=["SVHN", "MNIST_M", "MNIST"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
     parser.add_argument("--label_discount", type=float, default=1.0)
 
     args = parser.parse_args()

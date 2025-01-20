@@ -16,3 +16,4 @@ image_log
 lightning_logs
 data
 analysis
+*.ipynb

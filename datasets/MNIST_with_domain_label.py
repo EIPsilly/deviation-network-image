@@ -42,7 +42,9 @@ class MNIST_Dataset_with_domain_label(Dataset):
                 img = img.convert('RGB')
             img = resize_transform(img)
             self.img_list.append(img)
-        
+        tmp = list((set({0, 1, 2, 3}) - set(np.unique(self.domain_labels))))[0]
+        if tmp != 3:
+            self.domain_labels[np.where(self.domain_labels == 3)] = tmp
         self.semi_domain_labels = self.domain_labels.copy()
         if "domain_label_ratio" in args:
             from sklearn.model_selection import train_test_split
@@ -79,8 +81,8 @@ class MNIST_with_domain_label():
             
         normal_class = "".join(list(map(str,args.normal_class)))
         anomaly_class = "".join(list(map(str,args.anomaly_class)))
-        if args.domain_cnt == 3:
-            train_path = f'../domain-generalization-for-anomaly-detection/data/MNIST/semi-supervised/3domain/20241231-MNIST-{normal_class}-{anomaly_class}.npz'
+        list.sort(args.in_domain_type)
+        train_path = f'../domain-generalization-for-anomaly-detection/data/MNIST/semi-supervised/{args.domain_cnt}domain/20250120-MNIST-{",".join(args.in_domain_type)}-{normal_class}-{anomaly_class}.npz'
         
         if ("contamination_rate" in args == False) or (args.contamination_rate == 0):
             pass
@@ -91,9 +93,7 @@ class MNIST_with_domain_label():
         if ("label_discount" in args == False) or (args.label_discount == 0):
             pass
         else:
-            if args.domain_cnt == 3:
-                train_path = f'../domain-generalization-for-anomaly-detection/data/MNIST/semi-supervised/3domain/20241231-MNIST-{normal_class}-{anomaly_class}-{args.label_discount}.npz'
-        
+            train_path = f'../domain-generalization-for-anomaly-detection/data/MNIST/semi-supervised/{args.domain_cnt}domain/20250120-MNIST-{",".join(args.in_domain_type)}-{"".join(map(str, args.normal_class))}-{"".join(map(str, args.anomaly_class))}-{args.label_discount}.npz'
 
         data = np.load(train_path, allow_pickle=True)
 
