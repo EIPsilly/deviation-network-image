@@ -353,3 +353,5 @@ if __name__ == '__main__':
              test_results_list = np.array(test_results_list),
              test_metric = np.array(test_metric),
              args = np.array(args.__dict__),)
+
+    os.remove(os.path.join(args.experiment_dir, f'{file_name}.pt'))
