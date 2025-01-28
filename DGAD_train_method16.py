@@ -245,7 +245,7 @@ if __name__ == '__main__':
     parser.add_argument("--confidence_margin", type=int, default=5)
 
     parser.add_argument("--random_seed", type=int, default=42, help="the random seed number")
-    parser.add_argument('--workers', type=int, default=10, metavar='N', help='dataloader threads')
+    parser.add_argument('--workers', type=int, default=5, metavar='N', help='dataloader threads')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
     parser.add_argument('--weight_name', type=str, default='model.pkl', help="the name of model weight")
     parser.add_argument('--dataset_root', type=str, default='./data/mvtec_anomaly_detection', help="dataset root")
