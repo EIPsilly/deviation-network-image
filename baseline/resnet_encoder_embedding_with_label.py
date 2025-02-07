@@ -71,6 +71,7 @@ class Trainer(object):
     
     def train(self, data_loader):
         loss_list = []
+        train_start = time.time()
         for i, sample in enumerate(data_loader):
             idx, image, augimg, target, domain_label, semi_domain_label = sample
 
@@ -88,6 +89,8 @@ class Trainer(object):
             print(loss.item())
             loss_list.append(loss.item())
         
+        train_end = time.time()
+        print("training_time",train_end - train_start)
         return loss_list
     
     def test(self, data_loader):

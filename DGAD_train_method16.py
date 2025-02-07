@@ -87,12 +87,12 @@ class Trainer(object):
             
             reg_loss = self.uniform_criterion(texture_scores)
 
-            scores_list.append(scores.cpu().detach().numpy())
-            texture_scores_list.append(texture_scores.cpu().detach().numpy())
-            class_feature_list.append(class_feature.cpu().detach().numpy())
-            texture_feature_list.append(texture_feature.cpu().detach().numpy())
-            target_list.append(target.cpu().detach().numpy())
-            domain_label_list.append(domain_label.cpu().detach().numpy())
+            # scores_list.append(scores.cpu().detach().numpy())
+            # texture_scores_list.append(texture_scores.cpu().detach().numpy())
+            # class_feature_list.append(class_feature.cpu().detach().numpy())
+            # texture_feature_list.append(texture_feature.cpu().detach().numpy())
+            # target_list.append(target.cpu().detach().numpy())
+            # domain_label_list.append(domain_label.cpu().detach().numpy())
             
             class_feature = F.normalize(class_feature - self.model.center) 
             aug_class_feature = F.normalize(aug_class_feature - self.model.center) 
@@ -119,8 +119,9 @@ class Trainer(object):
             train_loss += loss.item()
 
             train_loss_list.append(loss.item())
-            sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(), class_reg_loss.item(), ])
-            
+            # sub_train_loss_list.append([devnet_loss.item(),reg_loss.item(),NCE_loss.item(),PL_loss.item(), class_reg_loss.item(), ])
+
+        train_end = time.time()
         self.scheduler.step()
         self.domain_key = "val"
         val_loss_list, val_auroc, val_auprc, total_pred, total_target, file_name_list = self.eval(self.val_loader)
@@ -141,11 +142,11 @@ class Trainer(object):
             test_start = time.time()
             test_metric = self.test()
             end = time.time()
-            print(f'train time: {end - train_start}\t test time: {end - test_start}')
+            print(f'train time: {train_end - train_start}\t test time: {end - test_start}')
         else:
             test_metric=None
             end = time.time()
-            print(f'train time: {end - train_start}')
+            print(f'train time: {train_end - train_start}')
 
         return train_loss_list, val_loss_list, val_auroc, val_auprc, test_metric, sub_train_loss_list
     
@@ -225,7 +226,7 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="MNIST_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
     parser.add_argument("--contamination_rate", type=float ,default=0.0)
     parser.add_argument("--severity", type=int, default=3)
     parser.add_argument("--checkitew", type=str, default="bottle")
@@ -256,7 +257,7 @@ if __name__ == '__main__':
     
     parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
     # parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
-    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
+    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='DGAD15', help="the backbone network")

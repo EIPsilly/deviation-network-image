@@ -23,7 +23,7 @@ with open("baseline/embedding_data.yaml", 'r', encoding="utf-8") as f:
     config = yaml.load(f.read(), Loader=yaml.FullLoader)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+parser.add_argument("--data_name", type=str, default="MNIST_with_domain_label")
 parser.add_argument("--contamination_rate", type=float ,default=0.06)
 parser.add_argument("--severity", type=int, default=3)
 parser.add_argument("--checkitew", type=str, default="bottle")
@@ -53,20 +53,20 @@ parser.add_argument('--classname', type=str, default='carpet', help="the subclas
 parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
 parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
 
-parser.add_argument("--normal_class", nargs="+", type=int, default=[6])
-parser.add_argument("--anomaly_class", nargs="+", type=int, default=[0,1,2,3,4,5])
+parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
+parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
 parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
 parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-parser.add_argument('--backbone', type=str, default='PReNet', help="the backbone network")
+parser.add_argument('--backbone', type=str, default='DeepSAD', help="the backbone network")
 parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
 parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
 parser.add_argument("--gpu",type=str, default="3")
 parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-parser.add_argument("--domain_cnt", type=int, default=1)
+parser.add_argument("--domain_cnt", type=int, default=3)
 parser.add_argument("--use_AE", type=int, default=0)
 parser.add_argument("--method", type=int, default=0)
 parser.add_argument("--label_discount", type=float, default=1.0)
-parser.add_argument("--in_domain_type", nargs="+", type=str, default=["SVHN", "MNIST_M", "MNIST"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
+parser.add_argument("--in_domain_type", nargs="+", type=str, default=["SYN", "MNIST_M", "MNIST"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
 
 args = parser.parse_args()
 args.label_discount = int(8 * 27 / args.label_discount)
@@ -116,7 +116,10 @@ print(f'val_labels:{Counter(data["val_labels"].squeeze())}')
 random_seed = random.randint(0, 2**32 - 1)
 if args.backbone == "DeepSAD":
     clf = DeepSAD(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2, random_state=random_seed)
+    train_start = time.time()
     clf.fit(data["train_embeddings"], data["train_labels"].squeeze())
+    train_end = time.time()
+    print("training_time", train_end - train_start)
 if args.backbone == "PReNet":
     clf = PReNet(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2, random_state=random_seed)
     anomaly_idx = np.where(data["train_labels"])[0]
@@ -125,10 +128,16 @@ if args.backbone == "PReNet":
     if len(anomaly_idx) == 1:
         x = np.concatenate([data["train_embeddings"], data["train_embeddings"][anomaly_idx]])
         y = np.concatenate([data["train_labels"], data["train_labels"][anomaly_idx]])
+    train_start = time.time()
     clf.fit(x, y)
+    train_end = time.time()
+    print("training_time", train_end - train_start)
 if args.backbone == "RoSAS":
     clf = RoSAS(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, verbose = 2, random_state=random_seed)
+    train_start = time.time()
     clf.fit(data["train_embeddings"], data["train_labels"])
+    train_end = time.time()
+    print("training_time", train_end - train_start)
 
 result = dict()
 
