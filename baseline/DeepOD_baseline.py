@@ -57,16 +57,16 @@ parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
 parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
 parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
 parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
-parser.add_argument('--backbone', type=str, default='RoSAS', help="the backbone network")
+parser.add_argument('--backbone', type=str, default='PReNet', help="the backbone network")
 parser.add_argument('--criterion', type=str, default='deviation', help="the loss function")
 parser.add_argument("--topk", type=float, default=0.1, help="the k percentage of instances in the topk module")
 parser.add_argument("--gpu",type=str, default="3")
 parser.add_argument("--results_save_path", type=str, default="/DEBUG")
-parser.add_argument("--domain_cnt", type=int, default=1)
+parser.add_argument("--domain_cnt", type=int, default=3)
 parser.add_argument("--use_AE", type=int, default=0)
 parser.add_argument("--method", type=int, default=0)
-parser.add_argument("--label_discount", type=float, default=1.0)
-parser.add_argument("--in_domain_type", nargs="+", type=str, default=["MNIST_M"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
+parser.add_argument("--label_discount", type=float, default=3.0)
+parser.add_argument("--in_domain_type", nargs="+", type=str, default=["MNIST", "MNIST_M", "SVHN"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
 
 args = parser.parse_args()
 args.label_discount = int(8 * 27 / args.label_discount)
@@ -111,7 +111,10 @@ if args.data_name.__contains__("MNIST"):
     list.sort(args.in_domain_type)
     data_name = f'method=0,backbone=wide_resnet50_2,domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount}'
     file_name = f'method={args.method},backbone={args.backbone},domain_cnt={args.domain_cnt},normal_class={args.normal_class},anomaly_class={args.anomaly_class},label_discount={args.label_discount},batch_size={args.batch_size},epochs={args.epochs},lr={args.lr},cnt={args.cnt}'
-    data = np.load(f'results/MNIST_embedding_MNIST_M/{data_name}.npz', allow_pickle=True)
+    if args.domain_cnt == 3:
+        data = np.load(f'results/MNIST_embedding_MNIST_SVHN_MNIST_M_MNIST/{data_name}.npz', allow_pickle=True)
+    else:
+        data = np.load(f'results/MNIST_embedding_MNIST_M/{data_name}.npz', allow_pickle=True)
     domain_list = ["MNIST", "MNIST_M", "SYN", "SVHN"]
 
 if not os.path.exists(f"results{args.results_save_path}"):
