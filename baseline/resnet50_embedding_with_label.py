@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import argparse
 import sys
 sys.path.append("/home/hzw/DGAD/deviation-network-image")
+sys.path.append("/data/DGAD/deviation-network-image")
 from dataloaders.dataloader import build_dataloader
 from torchvision import models
 
@@ -56,7 +57,7 @@ class Trainer(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_name", type=str, default="PACS_with_domain_label")
+    parser.add_argument("--data_name", type=str, default="MNIST_with_domain_label")
     parser.add_argument("--contamination_rate", type=float ,default=0.04)
     parser.add_argument("--checkitew", type=str, default="bottle")
     parser.add_argument("--severity", type=int, default=3)
@@ -86,8 +87,8 @@ if __name__ == '__main__':
     parser.add_argument('--img_size', type=int, default=448, help="the image size of input")
     parser.add_argument("--save_embedding", type=int, default=0, help="No intermediate results are saved")
     
-    parser.add_argument("--normal_class", nargs="+", type=int, default=[6])
-    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[0,1,2,3,4,5])
+    parser.add_argument("--normal_class", nargs="+", type=int, default=[0])
+    parser.add_argument("--anomaly_class", nargs="+", type=int, default=[1,2,3,4,5,6,7,8,9])
     parser.add_argument("--n_anomaly", type=int, default=13, help="the number of anomaly data in training set")
     parser.add_argument("--n_scales", type=int, default=2, help="number of scales at which features are extracted")
     parser.add_argument('--backbone', type=str, default='wide_resnet50_2', help="the backbone network")
@@ -98,7 +99,7 @@ if __name__ == '__main__':
     parser.add_argument("--domain_cnt", type=int, default=1)
     parser.add_argument("--method", type=int, default=0)
     parser.add_argument("--label_discount", type=float, default=1.0)
-    parser.add_argument("--in_domain_type", nargs="+", type=str, default=["SVHN", "MNIST_M", "MNIST"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
+    parser.add_argument("--in_domain_type", nargs="+", type=str, default=["MNIST_M"], choices=["MNIST", "MNIST_M", "SYN", "SVHN"])
     parser.add_argument("--no_fc", type=int, default=1)
     
     args = parser.parse_args()
